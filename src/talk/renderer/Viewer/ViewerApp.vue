@@ -7,6 +7,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { computed, ref } from 'vue'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import IconOpenInNew from 'vue-material-design-icons/OpenInNew.vue'
@@ -32,6 +33,7 @@ const file = ref(null)
 const list = ref([])
 const loadMore = ref(noopLoadMore)
 const hasMore = ref(false)
+const viewerRef = ref(null)
 
 const viewComponent = computed(() => file.value && window.OCA.Viewer.availableHandlers.find((handler) => handler.mimes.includes(file.value.mime))?.component)
 
@@ -132,9 +134,19 @@ defineExpose({
 		<component
 			:is="viewComponent"
 			v-if="viewComponent"
+			ref="viewerRef"
 			:file="file" />
 
 		<template #actions>
+			<NcActionButton
+				v-for="action in (viewerRef?.actions ?? [])"
+				:key="action.key"
+				@click="action.onClick()">
+				<template #icon>
+					<component :is="action.icon" :size="20" />
+				</template>
+				{{ action.label }}
+			</NcActionButton>
 			<NcActionLink :href="link">
 				<template #icon>
 					<IconOpenInNew :size="20" />
