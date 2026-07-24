@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-const { app, ipcMain, desktopCapturer, nativeImage, systemPreferences, shell, session } = require('electron')
+const { app, BrowserWindow, ipcMain, desktopCapturer, nativeImage, systemPreferences, shell, session } = require('electron')
 const { default: mri } = require('mri')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
@@ -87,6 +87,12 @@ ipcMain.on('app:grantUserGesturedPermission', (event, id) => {
 ipcMain.on('app:toggleDevTools', (event) => event.sender.toggleDevTools())
 ipcMain.handle('app:anything', () => { /* Put any code here to run it from UI */ })
 ipcMain.on('app:openChromeWebRtcInternals', () => openChromeWebRtcInternals())
+ipcMain.on('app:setScreenCaptureProtection', (event, active) => {
+	// Exclude the Talk window from screen capture while it shares a whole screen, so the
+	// window can't appear inside its own shared stream (the "hall of mirrors").
+	// setContentProtection is a no-op on Linux.
+	BrowserWindow.fromWebContents(event.sender)?.setContentProtection(!!active)
+})
 ipcMain.handle('app:update:check', async () => await checkForUpdate({ forceRequest: true }))
 /**
  * Extract the native window handle (HWND) encoded in an Electron window sourceId.
