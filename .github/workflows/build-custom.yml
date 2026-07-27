@@ -10,12 +10,14 @@
 name: Build custom distributables
 
 on:
+  # Push a tag to build, e.g. `git tag build-1 && git push fork build-1`.
+  # A tag trigger works from any branch, unlike workflow_dispatch, which GitHub
+  # only registers once the workflow file is on the default branch.
+  push:
+    tags:
+      - build-*
   workflow_dispatch:
     inputs:
-      talk_desktop_ref:
-        description: Branch or tag of this repository to build
-        default: build/custom
-        required: true
       spreed_ref:
         description: Branch or tag of the spreed fork to bundle as the built-in Talk
         default: build/custom
@@ -28,6 +30,8 @@ env:
   # Stable channel - no channel badge in the UI, no channel suffix in artifact names
   CHANNEL: stable
   SPREED_REPOSITORY: vladopol/spreed
+  # On a tag build there are no inputs, so fall back to the integration branch
+  SPREED_REF: ${{ inputs.spreed_ref || 'build/custom' }}
 
 concurrency:
   group: build-custom-${{ github.ref }}
@@ -42,14 +46,12 @@ jobs:
     steps:
       - name: Checkout talk-desktop
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.talk_desktop_ref }}
 
       - name: Checkout built-in Talk
         uses: actions/checkout@v5
         with:
           repository: ${{ env.SPREED_REPOSITORY }}
-          ref: ${{ inputs.spreed_ref }}
+          ref: ${{ env.SPREED_REF }}
           path: spreed
 
       - name: Set up Node
@@ -101,14 +103,12 @@ jobs:
     steps:
       - name: Checkout talk-desktop
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.talk_desktop_ref }}
 
       - name: Checkout built-in Talk
         uses: actions/checkout@v5
         with:
           repository: ${{ env.SPREED_REPOSITORY }}
-          ref: ${{ inputs.spreed_ref }}
+          ref: ${{ env.SPREED_REF }}
           path: spreed
 
       - name: Set up Node
@@ -159,14 +159,12 @@ jobs:
     steps:
       - name: Checkout talk-desktop
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.talk_desktop_ref }}
 
       - name: Checkout built-in Talk
         uses: actions/checkout@v5
         with:
           repository: ${{ env.SPREED_REPOSITORY }}
-          ref: ${{ inputs.spreed_ref }}
+          ref: ${{ env.SPREED_REF }}
           path: spreed
 
       - name: Set up Node
