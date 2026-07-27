@@ -1,0 +1,190 @@
+<!--
+  - SPDX-FileCopyrightText: 2026 Vladimir Poluliashenko
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+# Custom build
+
+This fork carries four changes that are not in upstream Nextcloud Talk Desktop yet, and
+builds unsigned distributables for Windows, macOS and Linux from them.
+
+Everything here is specific to the fork. Nothing in this document applies to
+[nextcloud/talk-desktop](https://github.com/nextcloud/talk-desktop).
+
+## What is in the build
+
+Two of the changes live in the desktop client, two in the built-in Talk (`spreed`),
+which is bundled into the app at build time.
+
+| # | Change | Repository | Platforms |
+| - | ------ | ---------- | --------- |
+| 1 | Browse other conversations during a call, keeping the call alive via a second signaling session ([spreed#12299](https://github.com/nextcloud/spreed/issues/12299)) | spreed | all |
+| 2 | Exclude the Talk window from screen capture while sharing a whole screen, so it cannot recurse into itself ([spreed#7792](https://github.com/nextcloud/spreed/issues/7792)) | talk-desktop | Windows, macOS |
+| 3 | List and share minimized windows, which Chromium omits - needed for full-screen Remote Desktop windows ([talk-desktop#1788](https://github.com/nextcloud/talk-desktop/issues/1788)) | talk-desktop | Windows only |
+| 4 | Release the camera when video is disabled, so its hardware light goes out ([spreed#4008](https://github.com/nextcloud/spreed/issues/4008)) | spreed | all |
+
+Change 2 is a no-op on Linux, where `setContentProtection` is not supported.
+Change 3 is Windows-only by nature: it enumerates windows through `user32` via the
+`koffi` FFI module, which is packaged for `win32` only.
+
+## Branches
+
+Both repositories use a `build/custom` integration branch. Neither is merged into
+`main` - `main` stays clean so it can keep tracking upstream.
+
+| Repository | Branch | Base | Built-in Talk |
+| ---------- | ------ | ---- | ------------- |
+| `vladopol/talk-desktop` | `build/custom` | upstream `main` | - |
+| `vladopol/spreed` | `build/custom` | `stable34` | v24.0.3 |
+
+`spreed` is built from `stable34` rather than `main`, because the desktop client's
+stable channel expects Talk v24.x (see the `talk` field in `package.json`). `main`
+carries an unreleased v25.0.0-dev.
+
+The feature work itself lives on its own branches (`feat/screenshare-*`,
+`feat/browse-during-call-*`, `feat/release-camera-on-video-off*`) and is merged into
+`build/custom`. Two of them touch the same lines of `src/main.js` and `src/preload.js`
+and need a trivial manual merge: the `require('electron')` destructuring gains both
+`BrowserWindow` and `nativeImage`, and the `TALK_DESKTOP` object keeps both new methods.
+
+Upstream is deliberately unreachable: `git push origin` is disabled in both clones
+(`git remote set-url --push origin DISABLED_upstream_read_only`), so only `git push fork`
+can succeed. Fetching from upstream still works.
+
+## Building
+
+### Via GitHub Actions (all platforms)
+
+`.github/workflows/build-custom.yml` builds all three platforms in parallel. Push a
+tag starting with `build-` to start it:
+
+```sh
+git tag build-4
+git push fork build-4
+```
+
+A full run takes roughly 12 minutes and uploads three artifacts: `windows-x64`
+(msi + exe), `macos-universal` (dmg) and `linux-x64` (flatpak + zip).
+
+The tag trigger exists because GitHub only registers a `workflow_dispatch` trigger
+once the workflow file is on the repository default branch, which is `main` here.
+The workflow also declares `workflow_dispatch` with a `spreed_ref` input, which
+becomes usable if the workflow ever lands on the default branch.
+
+### Locally
+
+Windows distributables can only be built on Windows, and the flatpak only on Linux -
+WiX, Squirrel and `flatpak-builder` have no cross-platform mode. A macOS workstation
+can produce the dmg and the Linux zip, nothing else.
+
+```sh
+git clone https://github.com/vladopol/talk-desktop && cd talk-desktop
+git checkout build/custom
+git clone https://github.com/vladopol/spreed spreed
+git -C spreed checkout build/custom
+npm ci
+npm ci --prefix spreed
+
+npm run build:mac        && npm run package:mac         # dmg, on macOS
+npm run build:windows:x64 && npm run package:windows:x64 # msi + exe, on Windows
+npm run build:linux      && npm run package:linux        # flatpak + zip, on Linux
+```
+
+Building the Linux zip from a non-Linux host needs an explicit architecture,
+otherwise it follows the host (arm64 on Apple Silicon):
+
+```sh
+./node_modules/.bin/electron-forge package --platform=linux --arch=x64
+./node_modules/.bin/electron-forge make --skip-package --platform=linux --arch=x64 --targets=zip
+```
+
+Windows additionally needs the WiX Toolset v3.14 (which pulls in .NET Framework 3.5)
+with `C:\Program Files (x86)\WiX Toolset v3.14\bin\` on `PATH`.
+
+## Signing
+
+The builds are **not** signed. That is a deliberate choice: a Windows code signing
+certificate and an Apple Developer Program membership both cost money, and the build
+is pinned to one version rather than shipped continuously.
+
+What users see:
+
+- **Windows** - SmartScreen shows "Windows protected your PC" on the installer.
+  "More info" then "Run anyway" gets past it. SmartScreen keys on the file hash, so
+  this reappears for every new installer, but the installed app starts silently.
+- **macOS** - Gatekeeper blocks the first launch. On macOS 15 and newer the
+  Control-click workaround is gone: the user must open System Settings, go to
+  Privacy & Security, and press "Open Anyway". The decision sticks for that copy of
+  the app.
+- **Linux** - nothing. Linux has no equivalent gate.
+
+macOS builds are still **ad-hoc signed**, by `forge.config.js`. This is not about
+warnings: packaging renames the bundle and rewrites its Resources, which invalidates
+the signature Electron ships with, and macOS on Apple Silicon refuses to launch a
+bundle whose signature is broken. Without the ad-hoc signature the app does not start
+at all. Setting `APPLE_ID`, `APPLE_ID_PASSWORD` and `APPLE_TEAM_ID` switches the same
+config over to real Developer ID signing and notarization; `WINDOWS_SIGN_PARAMS` does
+the same for Windows.
+
+The app is intentionally left unbranded - no `.overrides/build.config.json`, no
+version suffix. Keeping the default application IDs means the official installer
+upgrades over this build in place once the changes land upstream. The flip side is
+that the built-in update check still points at the official releases, so it will
+eventually offer an update that drops these changes.
+
+## Build workarounds
+
+Three problems in the toolchain are worked around in the workflow. All three were
+found by a failing build, and each one should be reconsidered rather than kept
+forever.
+
+**`macos-alias` and Node 24.** The dmg maker reaches `appdmg` → `ds-store` →
+`macos-alias`, which calls `util.isDate()` - one of the legacy `util.is*` helpers Node
+removed in v23. `macos-alias` has been unmaintained since 2017, so the workflow
+patches the call site after `npm ci`. The patch fails loudly if the call ever
+disappears. Note that preloading a shim through `NODE_OPTIONS` does *not* work on
+GitHub runners: setting `NODE_OPTIONS` via `$GITHUB_ENV` is refused outright. This
+goes away if upstream replaces `appdmg`.
+
+**Missing SVG loader for the flatpak icon.** `flatpak build-export` validates
+application icons through gdk-pixbuf. The Ubuntu runner has no SVG loader, so the
+scalable icon is rejected with `is not a valid icon: Format not recognized`. Fixed by
+installing `librsvg2-common`. Not fork-specific - worth reporting upstream.
+
+**WiX Toolset.** Not guaranteed to be present on the Windows runner image, so the
+workflow installs it if `candle.exe` is missing. Also not fork-specific.
+
+The flatpak target runs with `continue-on-error` so that a flatpak failure still lets
+the working zip reach the artifacts, and with `DEBUG` set, because
+`@malept/flatpak-bundler` otherwise swallows all `flatpak-builder` output and reports
+only an exit code. A following step then fails the job explicitly - without it a job
+that produced no flatpak would still report success.
+
+## Rebuilding on a newer upstream release
+
+1. Fetch upstream in both clones and update `main` / `stable34`.
+2. Rebase or re-merge the feature branches onto the new base, resolving the two known
+   conflicts in `src/main.js` and `src/preload.js`.
+3. Recreate `build/custom` from the updated feature branches in both repositories.
+4. Check that the `spreed` branch base still matches the `talk` field in the desktop
+   `package.json`.
+5. Push both branches, then push a new `build-*` tag.
+
+Re-run `npm ci --prefix spreed` after switching the `spreed` branch - the Talk version,
+and with it the dependency set, changes between bases.
+
+## Verifying a build
+
+Neither the installers nor the packaged apps are verified automatically. At minimum,
+before handing a build out:
+
+- install it on a clean machine of the target platform,
+- start a call and confirm changes 1, 2 and 4,
+- confirm change 3 on Windows, where it is the only place it is active.
+
+Artifact integrity can be checked without installing:
+
+```sh
+codesign --verify --deep --strict "Nextcloud Talk.app"   # macOS, expects an ad-hoc signature
+lipo -archs "Nextcloud Talk.app/Contents/MacOS/Nextcloud Talk"  # expects: x86_64 arm64
+```
