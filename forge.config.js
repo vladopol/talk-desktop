@@ -251,7 +251,13 @@ module.exports = {
 		// https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html#//apple_ref/doc/uid/TP40009250-SW8
 		appCategoryType: 'public.app-category.business',
 		extendInfo: path.join(__dirname, './resources/macos/entitlements.plist'),
-		osxSign: hasMacosSign && {},
+		// Without a Developer ID certificate, fall back to an ad-hoc signature.
+		// Packaging renames the bundle and modifies its Resources, which invalidates
+		// the signature Electron ships with. On Apple Silicon an app with a broken
+		// signature does not launch at all ("the application is damaged").
+		// An ad-hoc signature does not satisfy Gatekeeper - the user still has to
+		// allow the app once - but it makes the app runnable.
+		osxSign: hasMacosSign ? {} : { identity: '-', identityValidation: false },
 		osxNotarize: hasMacosSign && {
 			appleId: process.env.APPLE_ID,
 			appleIdPassword: process.env.APPLE_ID_PASSWORD,
