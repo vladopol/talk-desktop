@@ -139,17 +139,32 @@ jobs:
       - name: Package application
         run: npm run build:linux
 
-      - name: Make distributables
-        run: npm run package:linux
+      - name: Make zip distributable
+        run: ./node_modules/.bin/electron-forge make --skip-package --platform=linux --targets=zip
+
+      # Flatpak is the fragile half: @malept/flatpak-bundler shells out to flatpak
+      # and only reports the exit code, hiding the actual error behind its `debug`
+      # logger - hence DEBUG. It must not take the working zip down with it.
+      - name: Make flatpak distributable
+        id: flatpak
+        continue-on-error: true
+        env:
+          DEBUG: '@malept/flatpak-bundler'
+        run: ./node_modules/.bin/electron-forge make --skip-package --platform=linux --targets=flatpak
 
       - name: Upload distributables
         uses: actions/upload-artifact@v4
         with:
           name: linux-x64
           path: |
-            out/make/**/*.flatpak
             out/make/**/*.zip
+            out/make/**/*.flatpak
           if-no-files-found: error
+
+      - name: Report flatpak failure
+        if: steps.flatpak.outcome == 'failure'
+        run: |
+          echo "::warning::The zip was built and uploaded, but the flatpak failed. See the 'Make flatpak distributable' step for the flatpak-builder output."
 
   macos:
     name: macOS universal (dmg)
@@ -173,24 +188,29 @@ jobs:
           node-version: 24
           cache: npm
 
-      # appdmg -> ds-store -> macos-alias calls util.isDate(), one of the legacy
-      # util.is* helpers Node removed in v23. macos-alias is unmaintained, so the
-      # DMG maker cannot run on Node 24 without restoring it.
-      - name: Work around removed util.isDate in the DMG maker
-        run: |
-          cat > "$RUNNER_TEMP/util-isdate-shim.js" <<'SHIM'
-          const util = require('node:util')
-          if (typeof util.isDate !== 'function') {
-            util.isDate = (value) => Object.prototype.toString.call(value) === '[object Date]'
-          }
-          SHIM
-          echo "NODE_OPTIONS=--require $RUNNER_TEMP/util-isdate-shim.js" >> "$GITHUB_ENV"
-
       - name: Install dependencies
         run: npm ci
 
       - name: Install built-in Talk dependencies
         run: npm ci --prefix spreed
+
+      # appdmg -> ds-store -> macos-alias calls util.isDate(), one of the legacy
+      # util.is* helpers Node removed in v23, so the DMG maker cannot run on Node 24.
+      # macos-alias has been unmaintained since 2017, so patch the call site after
+      # install. Preloading a shim via NODE_OPTIONS is not an option: the runner
+      # refuses to set NODE_OPTIONS through $GITHUB_ENV.
+      - name: Patch macos-alias for Node 24
+        run: |
+          node - <<'PATCH'
+          const fs = require('node:fs')
+          const file = 'node_modules/macos-alias/lib/encode.js'
+          const source = fs.readFileSync(file, 'utf8')
+          const patched = source.replace('util.isDate(value)', "(Object.prototype.toString.call(value) === '[object Date]')")
+          if (patched === source) {
+            throw new Error(`No util.isDate call found in ${file} - the workaround is stale and should be removed`)
+          }
+          fs.writeFileSync(file, patched)
+          PATCH
 
       # Unsigned builds are ad-hoc signed by forge.config.js, so no certificates
       # or notarization credentials are needed here. Users allow the app once via
