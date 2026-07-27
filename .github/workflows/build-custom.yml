@@ -1,0 +1,211 @@
+# SPDX-FileCopyrightText: 2026 Vladimir Poluliashenko
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Builds the custom distributables for all platforms.
+# Not part of upstream - specific to this fork.
+#
+# The built-in Talk is taken from a matching branch of the spreed fork, which
+# carries the Talk-side changes (browse during call, camera release).
+
+name: Build custom distributables
+
+on:
+  workflow_dispatch:
+    inputs:
+      talk_desktop_ref:
+        description: Branch or tag of this repository to build
+        default: build/custom
+        required: true
+      spreed_ref:
+        description: Branch or tag of the spreed fork to bundle as the built-in Talk
+        default: build/custom
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # Stable channel - no channel badge in the UI, no channel suffix in artifact names
+  CHANNEL: stable
+  SPREED_REPOSITORY: vladopol/spreed
+
+concurrency:
+  group: build-custom-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64 (msi + exe)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout talk-desktop
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.talk_desktop_ref }}
+
+      - name: Checkout built-in Talk
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.SPREED_REPOSITORY }}
+          ref: ${{ inputs.spreed_ref }}
+          path: spreed
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      # The WiX Toolset is required by @electron-forge/maker-wix to build the MSI.
+      # It is not guaranteed to be present on the runner image, so install it unless it is.
+      - name: Set up WiX Toolset
+        shell: pwsh
+        run: |
+          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          if (-not (Test-Path "$wixBin\candle.exe")) {
+            choco install wixtoolset --version=3.14.1 --no-progress --yes
+          }
+          if (-not (Test-Path "$wixBin\candle.exe")) {
+            throw "WiX Toolset was not found at $wixBin after installation"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $wixBin
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install built-in Talk dependencies
+        run: npm ci --prefix spreed
+
+      - name: Package application
+        run: npm run build:windows:x64
+
+      - name: Make distributables
+        run: npm run package:windows:x64
+
+      - name: Upload distributables
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            out/make/**/*.msi
+            out/make/**/*.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux x64 (flatpak + zip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout talk-desktop
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.talk_desktop_ref }}
+
+      - name: Checkout built-in Talk
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.SPREED_REPOSITORY }}
+          ref: ${{ inputs.spreed_ref }}
+          path: spreed
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      # @malept/electron-installer-flatpak shells out to flatpak-builder and to
+      # eu-strip (elfutils). The runtime and base app versions must match the ones
+      # configured for MakerFlatpak in forge.config.js.
+      - name: Set up Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.electronjs.Electron2.BaseApp//25.08
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install built-in Talk dependencies
+        run: npm ci --prefix spreed
+
+      - name: Package application
+        run: npm run build:linux
+
+      - name: Make distributables
+        run: npm run package:linux
+
+      - name: Upload distributables
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: |
+            out/make/**/*.flatpak
+            out/make/**/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS universal (dmg)
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout talk-desktop
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.talk_desktop_ref }}
+
+      - name: Checkout built-in Talk
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.SPREED_REPOSITORY }}
+          ref: ${{ inputs.spreed_ref }}
+          path: spreed
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      # appdmg -> ds-store -> macos-alias calls util.isDate(), one of the legacy
+      # util.is* helpers Node removed in v23. macos-alias is unmaintained, so the
+      # DMG maker cannot run on Node 24 without restoring it.
+      - name: Work around removed util.isDate in the DMG maker
+        run: |
+          cat > "$RUNNER_TEMP/util-isdate-shim.js" <<'SHIM'
+          const util = require('node:util')
+          if (typeof util.isDate !== 'function') {
+            util.isDate = (value) => Object.prototype.toString.call(value) === '[object Date]'
+          }
+          SHIM
+          echo "NODE_OPTIONS=--require $RUNNER_TEMP/util-isdate-shim.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install built-in Talk dependencies
+        run: npm ci --prefix spreed
+
+      # Unsigned builds are ad-hoc signed by forge.config.js, so no certificates
+      # or notarization credentials are needed here. Users allow the app once via
+      # System Settings on first launch.
+      - name: Package application
+        run: npm run build:mac
+
+      - name: Make distributables
+        run: npm run package:mac
+
+      - name: Upload distributables
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: out/make/**/*.dmg
+          if-no-files-found: error
