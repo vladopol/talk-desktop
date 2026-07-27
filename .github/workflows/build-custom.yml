@@ -120,10 +120,14 @@ jobs:
       # @malept/electron-installer-flatpak shells out to flatpak-builder and to
       # eu-strip (elfutils). The runtime and base app versions must match the ones
       # configured for MakerFlatpak in forge.config.js.
+      #
+      # librsvg2-common provides the gdk-pixbuf SVG loader. Without it `flatpak
+      # build-export` cannot parse the scalable app icon and rejects it with
+      # "is not a valid icon: Format not recognized".
       - name: Set up Flatpak
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes flatpak flatpak-builder elfutils
+          sudo apt-get install --no-install-recommends --yes flatpak flatpak-builder elfutils librsvg2-common
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub \
             org.freedesktop.Platform//25.08 \
@@ -161,10 +165,14 @@ jobs:
             out/make/**/*.flatpak
           if-no-files-found: error
 
-      - name: Report flatpak failure
+      # continue-on-error above lets the working zip reach the artifacts, but it also
+      # reports the step as successful. Fail the job here so a missing flatpak is never
+      # mistaken for a green build.
+      - name: Fail if the flatpak was not built
         if: steps.flatpak.outcome == 'failure'
         run: |
-          echo "::warning::The zip was built and uploaded, but the flatpak failed. See the 'Make flatpak distributable' step for the flatpak-builder output."
+          echo "::error::The zip was built and uploaded, but the flatpak failed. See the 'Make flatpak distributable' step for the flatpak-builder output."
+          exit 1
 
   macos:
     name: macOS universal (dmg)
