@@ -257,7 +257,25 @@ module.exports = {
 		// signature does not launch at all ("the application is damaged").
 		// An ad-hoc signature does not satisfy Gatekeeper - the user still has to
 		// allow the app once - but it makes the app runnable.
-		osxSign: hasMacosSign ? {} : { identity: '-', identityValidation: false },
+		//
+		// The hardened runtime must be off for an ad-hoc build. It turns on library
+		// validation, which only lets a process load libraries signed with its own
+		// team identifier - and an ad-hoc signature has no team identifier at all.
+		// The app then dies at launch, unable to load its own Electron Framework:
+		// "mapping process and mapped file (non-platform) have different Team IDs".
+		// The hardened runtime is only required for notarization, which needs a
+		// Developer ID certificate anyway, so nothing is lost here.
+		//
+		// It has to be turned off through optionsForFile: @electron/osx-sign only
+		// reads hardenedRuntime from the per-file options, so passing it at the top
+		// level is silently ignored.
+		osxSign: hasMacosSign
+			? {}
+			: {
+					identity: '-',
+					identityValidation: false,
+					optionsForFile: () => ({ hardenedRuntime: false }),
+				},
 		osxNotarize: hasMacosSign && {
 			appleId: process.env.APPLE_ID,
 			appleIdPassword: process.env.APPLE_ID_PASSWORD,
