@@ -126,6 +126,22 @@ at all. Setting `APPLE_ID`, `APPLE_ID_PASSWORD` and `APPLE_TEAM_ID` switches the
 config over to real Developer ID signing and notarization; `WINDOWS_SIGN_PARAMS` does
 the same for Windows.
 
+An ad-hoc signature must be applied **without the hardened runtime**. The hardened
+runtime turns on library validation, which only lets a process load libraries signed
+with its own team identifier - and an ad-hoc signature has no team identifier. The app
+then dies at launch on its own Electron Framework with
+
+```
+Library not loaded: @rpath/Electron Framework.framework/Electron Framework
+... mapping process and mapped file (non-platform) have different Team IDs
+```
+
+`forge.config.js` therefore passes `optionsForFile: () => ({ hardenedRuntime: false })`
+for ad-hoc builds. It has to go through `optionsForFile`: `@electron/osx-sign` reads
+`hardenedRuntime` only from the per-file options and silently ignores it at the top
+level. Nothing is lost, since the hardened runtime is only needed for notarization,
+which requires a Developer ID certificate anyway.
+
 The app is intentionally left unbranded - no `.overrides/build.config.json`, no
 version suffix. Keeping the default application IDs means the official installer
 upgrades over this build in place once the changes land upstream. The flip side is
@@ -182,9 +198,33 @@ before handing a build out:
 - start a call and confirm changes 1, 2 and 4,
 - confirm change 3 on Windows, where it is the only place it is active.
 
-Artifact integrity can be checked without installing:
+Inspecting the artifacts is not a substitute for launching them. A macOS build that
+passed `codesign --verify --deep --strict` still died at launch, because that command
+checks signature integrity and says nothing about whether the process is allowed to
+load its own libraries. The cheapest check that would have caught it is starting the
+binary:
 
 ```sh
-codesign --verify --deep --strict "Nextcloud Talk.app"   # macOS, expects an ad-hoc signature
+"Nextcloud Talk.app/Contents/MacOS/Nextcloud Talk"
+```
+
+If it survives a few seconds and spawns helper processes, the framework loaded.
+
+File inspection is still useful as a first pass, just never as the last one:
+
+```sh
+codesign -dvvv "Nextcloud Talk.app"                             # expects: adhoc, and no `runtime` flag
 lipo -archs "Nextcloud Talk.app/Contents/MacOS/Nextcloud Talk"  # expects: x86_64 arm64
 ```
+
+Two things that file inspection cannot tell you either:
+
+- **Windows** - whether `koffi` actually loads. It is copied into the package by the
+  `packageAfterCopy` hook and unpacked from the asar archive; if that goes wrong,
+  change 3 breaks at runtime. Open the screen sharing picker and look for minimized
+  windows.
+- **Linux (zip)** - whether `chrome-sandbox` works. A zip does not preserve the setuid
+  bit, so the app may refuse to start with "The SUID sandbox helper binary was found,
+  but is not configured correctly". Either `sudo chown root:root chrome-sandbox &&
+  sudo chmod 4755 chrome-sandbox`, or run with `--no-sandbox`. The flatpak is not
+  affected - zypak handles it.
