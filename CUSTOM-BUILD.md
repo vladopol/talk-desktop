@@ -5,7 +5,7 @@
 
 # Custom build
 
-This fork carries four changes that are not in upstream Nextcloud Talk Desktop yet, and
+This fork carries five changes that are not in upstream Nextcloud Talk Desktop yet, and
 builds unsigned distributables for Windows, macOS and Linux from them.
 
 Everything here is specific to the fork. Nothing in this document applies to
@@ -13,7 +13,7 @@ Everything here is specific to the fork. Nothing in this document applies to
 
 ## What is in the build
 
-Two of the changes live in the desktop client, two in the built-in Talk (`spreed`),
+Three of the changes live in the desktop client, two in the built-in Talk (`spreed`),
 which is bundled into the app at build time.
 
 | # | Change | Repository | Platforms |
@@ -22,6 +22,7 @@ which is bundled into the app at build time.
 | 2 | Exclude the Talk window from screen capture while sharing a whole screen, so it cannot recurse into itself ([spreed#7792](https://github.com/nextcloud/spreed/issues/7792)) | talk-desktop | Windows, macOS |
 | 3 | List and share minimized windows, which Chromium omits - needed for full-screen Remote Desktop windows ([talk-desktop#1788](https://github.com/nextcloud/talk-desktop/issues/1788)) | talk-desktop | Windows only |
 | 4 | Release the camera when video is disabled, so its hardware light goes out ([spreed#4008](https://github.com/nextcloud/spreed/issues/4008)) | spreed | all |
+| 5 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812)) | talk-desktop | all |
 
 Change 2 is a no-op on Linux, where `setContentProtection` is not supported.
 Change 3 is Windows-only by nature: it enumerates windows through `user32` via the
@@ -42,7 +43,8 @@ stable channel expects Talk v24.x (see the `talk` field in `package.json`). `mai
 carries an unreleased v25.0.0-dev.
 
 The feature work itself lives on its own branches (`feat/screenshare-*`,
-`feat/browse-during-call-*`, `feat/release-camera-on-video-off*`) and is merged into
+`feat/image-viewer-panzoom`, `feat/browse-during-call-*`,
+`feat/release-camera-on-video-off*`) and is merged into
 `build/custom`. Two of them touch the same lines of `src/main.js` and `src/preload.js`
 and need a trivial manual merge: the `require('electron')` destructuring gains both
 `BrowserWindow` and `nativeImage`, and the `TALK_DESKTOP` object keeps both new methods.
