@@ -101,6 +101,22 @@ const cssLoaderWithModules = {
 	},
 }
 
+/**
+ * Sass prepends a UTF-8 BOM to the output of every module that contains a
+ * non-ASCII character. Extracted styles are concatenated as they are, so such a
+ * BOM ends up in the middle of the stylesheet, glued to the first selector of
+ * that module - which silently stops matching anything. Nothing warns about it:
+ * the rule is there, it just never applies.
+ */
+const sassLoader = {
+	loader: 'sass-loader',
+	options: {
+		sassOptions: {
+			charset: false,
+		},
+	},
+}
+
 const webpackRendererConfig = {
 	output: {
 		assetModuleFilename: 'talk_desktop__dist/assets/[name][ext]?v=[contenthash]',
@@ -136,18 +152,18 @@ const webpackRendererConfig = {
 				test: /\.css$/,
 				oneOf: [{
 					resourceQuery: /module/,
-					use: [MiniCssExtractPlugin.loader, cssLoaderWithModules, 'sass-loader'],
+					use: [MiniCssExtractPlugin.loader, cssLoaderWithModules, sassLoader],
 				}, {
-					use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
+					use: [MiniCssExtractPlugin.loader, 'css-loader', sassLoader],
 				}],
 			},
 			{
 				test: /\.scss$/,
 				oneOf: [{
 					resourceQuery: /module/,
-					use: [MiniCssExtractPlugin.loader, cssLoaderWithModules, 'sass-loader'],
+					use: [MiniCssExtractPlugin.loader, cssLoaderWithModules, sassLoader],
 				}, {
-					use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
+					use: [MiniCssExtractPlugin.loader, 'css-loader', sassLoader],
 				}],
 			},
 			{
