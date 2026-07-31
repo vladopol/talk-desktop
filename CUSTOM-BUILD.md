@@ -191,6 +191,19 @@ that produced no flatpak would still report success.
 Re-run `npm ci --prefix spreed` after switching the `spreed` branch - the Talk version,
 and with it the dependency set, changes between bases.
 
+Two things to check on every rebase, both learned from v2.2.3:
+
+- **Has upstream fixed something a patch here works around?** v2.2.3 fixed the Sass BOM
+  that corrupted extracted styles by pinning `postcss@8.5.23`; this fork carried its own
+  fix for the same bug (`sassOptions.charset: false` in `webpack.renderer.config.js`) and
+  dropped it on the rebase. Duplicated fixes are cheap to keep and expensive to explain
+  later, so drop ours whenever upstream covers the same failure - after confirming the
+  upstream fix actually holds on this branch, not just in the changelog.
+- **Do the linters still pass?** The rebase pulls in a new dependency tree, and stylistic
+  rules can get stricter without any upstream code change. `npm run lint` and
+  `npm run ts:check` before tagging; the fixes belong in the commit that introduced the
+  code, not in a trailing "lint" commit.
+
 ## Verifying a build
 
 Neither the installers nor the packaged apps are verified automatically. At minimum,
