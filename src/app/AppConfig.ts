@@ -101,6 +101,21 @@ export type AppConfig = {
 	// ----------------------
 
 	/**
+	 * Whether to show a notification banner when a chat notification is received.
+	 * - 'always': always show the banner
+	 * - 'respect-dnd': show the banner only if user status is not Do-Not-Disturb [default]
+	 * - 'never': never show the banner
+	 */
+	showNotificationChat: 'always' | 'respect-dnd' | 'never'
+	/**
+	 * Whether to show a notification banner when a call notification is received
+	 * and the call popup is not shown.
+	 * - 'always': always show the banner
+	 * - 'respect-dnd': show the banner only if user status is not Do-Not-Disturb [default]
+	 * - 'never': never show the banner
+	 */
+	showNotificationCall: 'always' | 'respect-dnd' | 'never'
+	/**
 	 * Whether to play a sound when a chat notification is received.
 	 * Same as notifications.sound_notification initial state.
 	 * - 'always': always play sound
@@ -150,6 +165,8 @@ const defaultAppConfig: AppConfig = {
 	systemTitleBar: false,
 	monochromeTrayIcon: isMac,
 	zoomFactor: 1,
+	showNotificationChat: 'respect-dnd',
+	showNotificationCall: 'respect-dnd',
 	playSoundChat: 'respect-dnd',
 	playSoundCall: 'respect-dnd',
 	enableCallbox: 'respect-dnd',
