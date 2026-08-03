@@ -32,6 +32,8 @@ const systemTitleBar = useAppConfigValue('systemTitleBar')
 const monochromeTrayIcon = useAppConfigValue('monochromeTrayIcon')
 const zoomFactor = useAppConfigValue('zoomFactor')
 
+const showNotificationChat = useAppConfigValue('showNotificationChat')
+const showNotificationCall = useAppConfigValue('showNotificationCall')
 const playSoundChat = useAppConfigValue('playSoundChat')
 const playSoundCall = useAppConfigValue('playSoundCall')
 const enableCallbox = useAppConfigValue('enableCallbox')
@@ -83,7 +85,9 @@ const secondarySpeakerDevice = useAppConfigValue('secondarySpeakerDevice')
 
 		<NcFormGroup :label="t('talk_desktop', 'Notifications & Sounds')">
 			<NcFormBox>
+				<UiFormBoxSelectNative v-model="showNotificationChat" :label="t('talk_desktop', 'Show chat notification banner')" :options="notificationLevelOptions" />
 				<UiFormBoxSelectNative v-model="playSoundChat" :label="t('talk_desktop', 'Play chat notification sound')" :options="notificationLevelOptions" />
+				<UiFormBoxSelectNative v-model="showNotificationCall" :label="t('talk_desktop', 'Show call notification banner')" :options="notificationLevelOptions" />
 				<UiFormBoxSelectNative v-model="playSoundCall" :label="t('talk_desktop', 'Play call notification sound')" :options="notificationLevelOptions" />
 				<UiFormBoxSelectNative v-model="enableCallbox" :label="t('talk_desktop', 'Show call notification popup')" :options="notificationLevelOptions" />
 			</NcFormBox>
