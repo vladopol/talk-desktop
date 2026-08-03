@@ -200,6 +200,10 @@ Two things to check on every rebase, both learned from v2.2.3:
   dropped it on the rebase. Duplicated fixes are cheap to keep and expensive to explain
   later, so drop ours whenever upstream covers the same failure - after confirming the
   upstream fix actually holds on this branch, not just in the changelog.
+- **Are the fork-local Russian strings still there?** Change 6 adds two settings whose
+  labels upstream does not know about, so their `ru` translations were written by hand in
+  `l10n/ru.js` and `l10n/ru.json`. Those files are regenerated from Transifex upstream and
+  the two entries disappear on a rebase - the settings then show up in English.
 - **Do the linters still pass?** The rebase pulls in a new dependency tree, and stylistic
   rules can get stricter without any upstream code change. `npm run lint` and
   `npm run ts:check` before tagging; the fixes belong in the commit that introduced the
