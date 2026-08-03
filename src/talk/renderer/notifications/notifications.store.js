@@ -28,14 +28,25 @@ import { getNotificationsData } from './notifications.service.js'
 const isTestNotificationApp = (notificationApp) => ['admin_notification_talk', 'admin_notifications'].includes(notificationApp)
 
 /**
+ * Resolve an 'always' | 'respect-dnd' | 'never' notification setting
+ *
+ * @param {'always'|'respect-dnd'|'never'} level - the configured level
+ * @param {boolean} isDnd - whether the user status is Do-Not-Disturb
+ * @return {boolean} whether this part of the notification is enabled
+ */
+const isNotificationLevelEnabled = (level, isDnd) => level === 'respect-dnd' ? !isDnd : level === 'always'
+
+/**
  *
  */
 export function createNotificationStore() {
 	const userStatusStore = useUserStatusStore()
 	const playSoundChat = useAppConfigValue('playSoundChat')
-	const shouldPlaySoundChat = computed(() => playSoundChat.value === 'respect-dnd'
-		? userStatusStore.userStatus?.status !== 'dnd'
-		: playSoundChat.value === 'always')
+	const showNotificationChat = useAppConfigValue('showNotificationChat')
+	const showNotificationCall = useAppConfigValue('showNotificationCall')
+	const shouldPlaySoundChat = computed(() => isNotificationLevelEnabled(playSoundChat.value, userStatusStore.isDnd))
+	const shouldShowNotificationChat = computed(() => isNotificationLevelEnabled(showNotificationChat.value, userStatusStore.isDnd))
+	const shouldShowNotificationCall = computed(() => isNotificationLevelEnabled(showNotificationCall.value, userStatusStore.isDnd))
 
 	let _oldcount = 0
 	let notificationsSet = new Set()
@@ -170,9 +181,12 @@ export function createNotificationStore() {
 		const isNotificationFromPendingCall = notification.objectType === 'call'
 			&& await checkCurrentUserHasPendingCall(notification.objectId)
 
-		const enableCallboxConfig = getAppConfigValue('enableCallbox')
 		const shouldShowCallPopup = isNotificationFromPendingCall
-			&& (enableCallboxConfig === 'always' || (enableCallboxConfig === 'respect-dnd' && !userStatusStore.isDnd))
+			&& isNotificationLevelEnabled(getAppConfigValue('enableCallbox'), userStatusStore.isDnd)
+
+		const shouldShowBanner = isNotificationFromPendingCall
+			? shouldShowNotificationCall.value
+			: shouldShowNotificationChat.value
 
 		if (shouldShowCallPopup) {
 			const params = {
@@ -182,7 +196,7 @@ export function createNotificationStore() {
 				avatar: notification.subjectRichParameters.call['icon-url'],
 			}
 			window.TALK_DESKTOP.showCallbox(params)
-		} else {
+		} else if (shouldShowBanner) {
 			const n = new Notification(notification.subject, {
 				title: notification.subject,
 				lang: appData.userMetadata.locale,

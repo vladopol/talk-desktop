@@ -5,7 +5,7 @@
 
 # Custom build
 
-This fork carries five changes that are not in upstream Nextcloud Talk Desktop yet, and
+This fork carries six changes that are not in upstream Nextcloud Talk Desktop yet, and
 builds unsigned distributables for Windows, macOS and Linux from them.
 
 Everything here is specific to the fork. Nothing in this document applies to
@@ -13,7 +13,7 @@ Everything here is specific to the fork. Nothing in this document applies to
 
 ## What is in the build
 
-Three of the changes live in the desktop client, two in the built-in Talk (`spreed`),
+Four of the changes live in the desktop client, two in the built-in Talk (`spreed`),
 which is bundled into the app at build time.
 
 | # | Change | Repository | Platforms |
@@ -23,6 +23,7 @@ which is bundled into the app at build time.
 | 3 | List and share minimized windows, which Chromium omits - needed for full-screen Remote Desktop windows ([talk-desktop#1788](https://github.com/nextcloud/talk-desktop/issues/1788)) | talk-desktop | Windows only |
 | 4 | Release the camera when video is disabled, so its hardware light goes out ([spreed#4008](https://github.com/nextcloud/spreed/issues/4008)) | spreed | all |
 | 5 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812)) | talk-desktop | all |
+| 6 | Let the "Do not disturb" user status silence notification banners, not only sounds and the call popup | talk-desktop | all |
 
 Change 2 is a no-op on Linux, where `setContentProtection` is not supported.
 Change 3 is Windows-only by nature: it enumerates windows through `user32` via the
