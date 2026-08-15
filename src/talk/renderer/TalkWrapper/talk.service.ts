@@ -7,6 +7,7 @@ import type { Router } from 'vue-router'
 
 import { isNavigationFailure, NavigationFailureType } from '@talk/node_modules/vue-router'
 import { useTalkHashStore } from '@talk/src/stores/talkHash.js'
+import { logIssue1777Origin } from '@talk/src/utils/issue1777Debug.ts'
 
 /**
  * Get the Talk instance
@@ -47,11 +48,31 @@ export function openRoot() {
  * @param options.directCall - Use direct call (open media settings to join a call)
  */
 export async function openConversation(token: string, { directCall = false }: { directCall?: boolean } = {}) {
+	// Origin of the suspected chain in #1777: accepting an incoming call pushes a
+	// history entry carrying '#direct-call'. Recorded in the non-evictable ring
+	// because the auto-call may follow tens of minutes later.
+	logIssue1777Origin('talk-desktop openConversation', {
+		token,
+		directCall,
+		hashPushed: directCall ? '#direct-call' : undefined,
+		currentPath: getTalkRouter().currentRoute.value.fullPath,
+	}, true)
+
 	await getTalkRouter().push({
 		name: 'conversation',
 		params: { token },
 		hash: directCall ? '#direct-call' : undefined,
-	}).catch(passDuplicatedNavigationError)
+	}).then(() => {
+		logIssue1777Origin('talk-desktop openConversation push resolved', { token, directCall })
+	}).catch((error) => {
+		logIssue1777Origin('talk-desktop openConversation push REJECTED', {
+			token,
+			directCall,
+			duplicated: isNavigationFailure(error, NavigationFailureType.duplicated),
+			error: String(error),
+		}, true)
+		passDuplicatedNavigationError(error as Error)
+	})
 
 	await window.TALK_DESKTOP.focusTalk()
 }
