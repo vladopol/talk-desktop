@@ -36,7 +36,13 @@ mirroring effect". It only warns; change 2 actually keeps the window out of the
 captured stream. On Linux the placeholder is now the only protection, which is what
 change 2 always relied on. On Windows and macOS both are active, so the placeholder
 covers the local preview to warn about a mirroring effect that change 2 has already
-prevented. Suppressing it in the desktop build is an open question, not yet decided.
+prevented.
+
+Both stay, and the placeholder is deliberately not suppressed in the desktop build. It
+is dismissible, so the cost is one click on a warning that happens to be redundant on
+two of the three platforms. Hiding it would mean a fork-local patch to upstream's
+`ScreenShare.vue` - a file this fork does not otherwise touch - that would have to be
+carried and re-resolved on every rebase, which is more than the wart is worth.
 
 ## Branches
 
