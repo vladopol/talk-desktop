@@ -29,6 +29,15 @@ Change 2 is a no-op on Linux, where `setContentProtection` is not supported.
 Change 3 is Windows-only by nature: it enumerates windows through `user32` via the
 `koffi` FFI module, which is packaged for `win32` only.
 
+Talk v24.0.4 ships its own guard against the same bug
+([spreed#18690](https://github.com/nextcloud/spreed/pull/18690)): a dismissible
+placeholder over the local screen preview, reading "Sharing this window may cause a
+mirroring effect". It only warns; change 2 actually keeps the window out of the
+captured stream. On Linux the placeholder is now the only protection, which is what
+change 2 always relied on. On Windows and macOS both are active, so the placeholder
+covers the local preview to warn about a mirroring effect that change 2 has already
+prevented. Suppressing it in the desktop build is an open question, not yet decided.
+
 ## Branches
 
 Both repositories use a `build/custom` integration branch. Neither is merged into
@@ -36,12 +45,17 @@ Both repositories use a `build/custom` integration branch. Neither is merged int
 
 | Repository | Branch | Base | Built-in Talk |
 | ---------- | ------ | ---- | ------------- |
-| `vladopol/talk-desktop` | `build/custom` | upstream `main` | - |
-| `vladopol/spreed` | `build/custom` | `stable34` | v24.0.3 |
+| `vladopol/talk-desktop` | `build/custom` | upstream `v2.2.4` | - |
+| `vladopol/spreed` | `build/custom` | `v24.0.4` (tag on `stable34`) | v24.0.4 |
 
 `spreed` is built from `stable34` rather than `main`, because the desktop client's
 stable channel expects Talk v24.x (see the `talk` field in `package.json`). `main`
-carries an unreleased v25.0.0-dev.
+carries an unreleased v25.0.0-dev, and the beta channel now points at v25.0.0-alpha.1.
+
+Both branches sit on release tags rather than on branch heads, so a build is
+reproducible from the tag alone. For `spreed` that means the base matches
+`talk.stable` in the desktop `package.json` exactly, at the price of leaving whatever
+has landed on `stable34` since the tag - 7 commits at the time of the v24.0.4 rebase.
 
 The feature work itself lives on its own branches (`feat/screenshare-*`,
 `feat/image-viewer-panzoom`, `feat/browse-during-call-*`,
@@ -181,33 +195,67 @@ that produced no flatpak would still report success.
 
 ## Rebuilding on a newer upstream release
 
-1. Fetch upstream in both clones and update `main` / `stable34`.
-2. Rebase or re-merge the feature branches onto the new base, resolving the two known
-   conflicts in `src/main.js` and `src/preload.js`.
-3. Recreate `build/custom` from the updated feature branches in both repositories.
-4. Check that the `spreed` branch base still matches the `talk` field in the desktop
+1. Fetch upstream in both clones, tags included.
+2. Branch a backup off each `build/custom` before touching it, named after the base it
+   still sits on (`backup/build-custom-v223`, `backup/build-custom-v2403`).
+3. Rebase `build/custom` onto the new tag in both clones. The desktop branch sits on a
+   tag, so `git rebase v2.2.4` is enough; the `spreed` branch sits on a `stable34`
+   commit, so it needs `git rebase --onto v24.0.4 <old base> build/custom`.
+4. Check that the `spreed` base still matches the `talk` field in the desktop
    `package.json`.
-5. Push both branches, then push a new `build-*` tag.
+5. Reinstall and run the checks below, then push both branches and a new `build-*` tag.
 
-Re-run `npm ci --prefix spreed` after switching the `spreed` branch - the Talk version,
-and with it the dependency set, changes between bases.
+Rebasing `build/custom` directly leaves the feature branches on the old base. That is
+fine as long as they are not merged in again. If one is still being worked on, rebase it
+too and recreate `build/custom` from it - and expect the known self-conflict between the
+screensharing branches in `src/main.js` and `src/preload.js`, where the
+`require('electron')` destructuring has to keep both `BrowserWindow` and `nativeImage`
+and the `TALK_DESKTOP` object both new methods.
 
-Two things to check on every rebase, both learned from v2.2.3:
+Re-run `npm ci` in both clones after switching branches - the Talk version, and with it
+the dependency set, changes between bases.
+
+What the v2.2.4 / v24.0.4 rebase actually cost, as a calibration point: the desktop
+branch replayed all 24 commits without a single conflict, because that release changed
+no source file at all. `spreed` conflicted on five commits, four of them over nothing
+but an import line in `src/App.vue` or `src/views/MainView.vue`, against upstream's new
+`hasExternalCallService` import. The fifth was real but small: upstream added an
+external-call teardown to the same `if` in `App.vue` that change 1 guards with
+`!skipLeavingPreviousConversation`, and the teardown belongs inside that guard, since it
+should only run when the conversation is actually being left.
+
+Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
 
 - **Has upstream fixed something a patch here works around?** v2.2.3 fixed the Sass BOM
   that corrupted extracted styles by pinning `postcss@8.5.23`; this fork carried its own
   fix for the same bug (`sassOptions.charset: false` in `webpack.renderer.config.js`) and
   dropped it on the rebase. Duplicated fixes are cheap to keep and expensive to explain
   later, so drop ours whenever upstream covers the same failure - after confirming the
-  upstream fix actually holds on this branch, not just in the changelog.
+  upstream fix actually holds on this branch, not just in the changelog. The overlap can
+  also be partial: Talk v24.0.4 addressed the same bug as change 2 with a weaker fix, so
+  both stayed, and what needs deciding is whether upstream's warning still makes sense
+  next to ours.
+- **Did a fork commit land upstream?** The `spreed` branch carried
+  `chore: update update-nextcloud-openapi workflow`, which was backported into stable34
+  and arrived in v24.0.4. The rebase dropped it silently, as it should. Count the commits
+  on both sides of a rebase and account for every one that disappears.
 - **Are the fork-local Russian strings still there?** Change 6 adds two settings whose
   labels upstream does not know about, so their `ru` translations were written by hand in
   `l10n/ru.js` and `l10n/ru.json`. Those files are regenerated from Transifex upstream and
   the two entries disappear on a rebase - the settings then show up in English.
 - **Do the linters still pass?** The rebase pulls in a new dependency tree, and stylistic
   rules can get stricter without any upstream code change. `npm run lint` and
-  `npm run ts:check` before tagging; the fixes belong in the commit that introduced the
-  code, not in a trailing "lint" commit.
+  `npm run ts:check` in both clones before tagging; the fixes belong in the commit that
+  introduced the code, not in a trailing "lint" commit. `ts:check` is the one that finds
+  things: the v24.0.4 rebase caught three type errors in the `#1777` debug commits, all
+  from `@total-typescript/ts-reset` handing back `unknown` where the code assumed a type
+  (`JSON.parse`, and the reason of a rejected promise). None were new - they had simply
+  never been checked.
+- **`npm test` in `spreed` does not run on Node 25.** Every one of the 79 test files dies
+  in setup with `localStorage.getItem is not a function`, and a pristine `v24.0.4`
+  worktree fails exactly the same way, so it is the toolchain and not the fork. Confirm
+  that on the upstream tag before spending time on it, and use an older Node if the suite
+  is actually needed.
 
 ## Verifying a build
 
