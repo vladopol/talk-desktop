@@ -41,12 +41,27 @@ Talk v24.0.4 shipped its own answer to the same bug
 placeholder over the local screen preview, reading "Sharing this window may cause a
 mirroring effect".
 
-Upstream's version is weaker - it warns where ours prevented, and dismissing it brings
-the recursion back - but it was dropped anyway, on the reasoning at the top of this
-document: a patch that upstream has covered is a patch to be carried, re-resolved and
-re-justified at every release, and the fork is trying to get smaller. The work is kept
-on `feat/screenshare-content-protection`, which is no longer merged into `build/custom`.
-It was last built into `build-14`.
+Ours prevented where upstream's only warns, and dismissing the placeholder brings the
+recursion back - but upstream's is the better solution regardless, on two counts our
+version could not answer:
+
+- **It covers all three platforms.** `setContentProtection` is a no-op on Linux, so a
+  third of the users never got the fix at all. The placeholder is plain Vue and works
+  everywhere.
+- **It keeps the presenter and the viewers looking at the same thing.** Cutting the
+  window out of the capture creates a mismatch that has bitten in practice: the
+  presenter points at the chat window on their screen and the viewers see the desktop
+  behind it, with no idea what is being pointed at. Hiding a window only from the
+  audience is surprising in a way a placeholder is not.
+
+So this is not a fork giving up a better patch to shrink - it is a worse patch being
+replaced. Where ours is genuinely stronger is narrow: `Dismiss` reinstates the bug, and
+in Electron the placeholder also appears when sharing a single window, where mirroring
+cannot happen (upstream skips it only for `displaySurface === 'browser'`, which Electron
+never reports). Neither is worth carrying a patch for.
+
+The work is kept on `feat/screenshare-content-protection`, which is no longer merged
+into `build/custom`. It was last built into `build-14`.
 
 ## Branches
 
