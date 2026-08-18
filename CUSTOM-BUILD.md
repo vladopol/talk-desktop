@@ -5,44 +5,48 @@
 
 # Custom build
 
-This fork carries six changes that are not in upstream Nextcloud Talk Desktop yet, and
+This fork carries five changes that are not in upstream Nextcloud Talk Desktop yet, and
 builds unsigned distributables for Windows, macOS and Linux from them.
+
+The list is meant to shrink. Every change here is a patch to re-resolve on every
+rebase, so whenever upstream covers the same ground its version wins, even when ours
+is better - the goal is to end up on a stock build, not to maintain a better fork.
 
 Everything here is specific to the fork. Nothing in this document applies to
 [nextcloud/talk-desktop](https://github.com/nextcloud/talk-desktop).
 
 ## What is in the build
 
-Four of the changes live in the desktop client, two in the built-in Talk (`spreed`),
+Three of the changes live in the desktop client, two in the built-in Talk (`spreed`),
 which is bundled into the app at build time.
 
 | # | Change | Repository | Platforms |
 | - | ------ | ---------- | --------- |
 | 1 | Browse other conversations during a call, keeping the call alive via a second signaling session ([spreed#12299](https://github.com/nextcloud/spreed/issues/12299)) | spreed | all |
-| 2 | Exclude the Talk window from screen capture while sharing a whole screen, so it cannot recurse into itself ([spreed#7792](https://github.com/nextcloud/spreed/issues/7792)) | talk-desktop | Windows, macOS |
-| 3 | List and share minimized windows, which Chromium omits - needed for full-screen Remote Desktop windows ([talk-desktop#1788](https://github.com/nextcloud/talk-desktop/issues/1788)) | talk-desktop | Windows only |
-| 4 | Release the camera when video is disabled, so its hardware light goes out ([spreed#4008](https://github.com/nextcloud/spreed/issues/4008)) | spreed | all |
-| 5 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812)) | talk-desktop | all |
-| 6 | Let the "Do not disturb" user status silence notification banners, not only sounds and the call popup | talk-desktop | all |
+| 2 | List and share minimized windows, which Chromium omits - needed for full-screen Remote Desktop windows ([talk-desktop#1788](https://github.com/nextcloud/talk-desktop/issues/1788)) | talk-desktop | Windows only |
+| 3 | Release the camera when video is disabled, so its hardware light goes out ([spreed#4008](https://github.com/nextcloud/spreed/issues/4008)) | spreed | all |
+| 4 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812)) | talk-desktop | all |
+| 5 | Let the "Do not disturb" user status silence notification banners, not only sounds and the call popup | talk-desktop | all |
 
-Change 2 is a no-op on Linux, where `setContentProtection` is not supported.
-Change 3 is Windows-only by nature: it enumerates windows through `user32` via the
+Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
 `koffi` FFI module, which is packaged for `win32` only.
 
-Talk v24.0.4 ships its own guard against the same bug
+### Dropped: screen capture protection
+
+The fork used to carry a sixth change, excluding the Talk window from OS screen capture
+via `BrowserWindow.setContentProtection` while a whole screen was shared, so the capture
+could not recurse into itself ([spreed#7792](https://github.com/nextcloud/spreed/issues/7792)).
+Talk v24.0.4 shipped its own answer to the same bug
 ([spreed#18690](https://github.com/nextcloud/spreed/pull/18690)): a dismissible
 placeholder over the local screen preview, reading "Sharing this window may cause a
-mirroring effect". It only warns; change 2 actually keeps the window out of the
-captured stream. On Linux the placeholder is now the only protection, which is what
-change 2 always relied on. On Windows and macOS both are active, so the placeholder
-covers the local preview to warn about a mirroring effect that change 2 has already
-prevented.
+mirroring effect".
 
-Both stay, and the placeholder is deliberately not suppressed in the desktop build. It
-is dismissible, so the cost is one click on a warning that happens to be redundant on
-two of the three platforms. Hiding it would mean a fork-local patch to upstream's
-`ScreenShare.vue` - a file this fork does not otherwise touch - that would have to be
-carried and re-resolved on every rebase, which is more than the wart is worth.
+Upstream's version is weaker - it warns where ours prevented, and dismissing it brings
+the recursion back - but it was dropped anyway, on the reasoning at the top of this
+document: a patch that upstream has covered is a patch to be carried, re-resolved and
+re-justified at every release, and the fork is trying to get smaller. The work is kept
+on `feat/screenshare-content-protection`, which is no longer merged into `build/custom`.
+It was last built into `build-14`.
 
 ## Branches
 
@@ -63,12 +67,13 @@ reproducible from the tag alone. For `spreed` that means the base matches
 `talk.stable` in the desktop `package.json` exactly, at the price of leaving whatever
 has landed on `stable34` since the tag - 7 commits at the time of the v24.0.4 rebase.
 
-The feature work itself lives on its own branches (`feat/screenshare-*`,
+The feature work itself lives on its own branches (`feat/screenshare-minimized-windows`,
 `feat/image-viewer-panzoom`, `feat/browse-during-call-*`,
-`feat/release-camera-on-video-off*`) and is merged into
-`build/custom`. Two of them touch the same lines of `src/main.js` and `src/preload.js`
-and need a trivial manual merge: the `require('electron')` destructuring gains both
-`BrowserWindow` and `nativeImage`, and the `TALK_DESKTOP` object keeps both new methods.
+`feat/release-camera-on-video-off*`) and is merged into `build/custom`.
+`feat/screenshare-content-protection` is the exception: it is kept but no longer merged,
+see above. While both screensharing branches were in, they collided in `src/main.js` and
+`src/preload.js` over the `require('electron')` destructuring and the `TALK_DESKTOP`
+object; with only one of them left there is nothing to resolve.
 
 Upstream is deliberately unreachable: `git push origin` is disabled in both clones
 (`git remote set-url --push origin DISABLED_upstream_read_only`), so only `git push fork`
@@ -238,14 +243,14 @@ Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
   dropped it on the rebase. Duplicated fixes are cheap to keep and expensive to explain
   later, so drop ours whenever upstream covers the same failure - after confirming the
   upstream fix actually holds on this branch, not just in the changelog. The overlap can
-  also be partial: Talk v24.0.4 addressed the same bug as change 2 with a weaker fix, so
-  both stayed, and what needs deciding is whether upstream's warning still makes sense
-  next to ours.
+  be partial and still count: Talk v24.0.4 answered the same bug as the old change 2 with
+  a weaker fix, and ours was dropped regardless, because carrying a better patch forever
+  costs more than the difference is worth. "Ours is better" is not a reason to keep it.
 - **Did a fork commit land upstream?** The `spreed` branch carried
   `chore: update update-nextcloud-openapi workflow`, which was backported into stable34
   and arrived in v24.0.4. The rebase dropped it silently, as it should. Count the commits
   on both sides of a rebase and account for every one that disappears.
-- **Are the fork-local Russian strings still there?** Change 6 adds two settings whose
+- **Are the fork-local Russian strings still there?** Change 5 adds two settings whose
   labels upstream does not know about, so their `ru` translations were written by hand in
   `l10n/ru.js` and `l10n/ru.json`. Those files are regenerated from Transifex upstream and
   the two entries disappear on a rebase - the settings then show up in English.
@@ -269,8 +274,8 @@ Neither the installers nor the packaged apps are verified automatically. At mini
 before handing a build out:
 
 - install it on a clean machine of the target platform,
-- start a call and confirm changes 1, 2 and 4,
-- confirm change 3 on Windows, where it is the only place it is active.
+- start a call and confirm changes 1 and 3,
+- confirm change 2 on Windows, where it is the only place it is active.
 
 Inspecting the artifacts is not a substitute for launching them. A macOS build that
 passed `codesign --verify --deep --strict` still died at launch, because that command
@@ -295,7 +300,7 @@ Two things that file inspection cannot tell you either:
 
 - **Windows** - whether `koffi` actually loads. It is copied into the package by the
   `packageAfterCopy` hook and unpacked from the asar archive; if that goes wrong,
-  change 3 breaks at runtime. Open the screen sharing picker and look for minimized
+  change 2 breaks at runtime. Open the screen sharing picker and look for minimized
   windows.
 - **Linux (zip)** - whether `chrome-sandbox` works. A zip does not preserve the setuid
   bit, so the app may refuse to start with "The SUID sandbox helper binary was found,
