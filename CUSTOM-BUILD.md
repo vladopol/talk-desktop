@@ -31,6 +31,48 @@ which is bundled into the app at build time.
 Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
 `koffi` FFI module, which is packaged for `win32` only.
 
+### What change 1 has to keep
+
+Change 1 is the largest patch here and the only one that rearranges the app's layout, so
+it is also the one that has broken in the field. Every rule below started as a bug report
+with a screenshot, and every one of them is easy to undo by accident when re-resolving the
+patch on a rebase. They live in `CallView.vue`, `ViewerOverlayCallView.vue`, `MainView.vue`
+and `ScreenShare.vue` in `spreed`.
+
+- **A call view whose conversation is not the viewed one is always the compact overlay.**
+  That is decided from the token in `CallView`, deliberately not from the `isViewerOverlay`
+  flag of the call view store: the flag belongs to the viewer, which clears it whenever a
+  file is closed - including a file opened in the browsed conversation - and the call view
+  would then expand to full size on top of the chat.
+- **The overlay is anchored to the bottom of the messages, not of the call container.**
+  While another conversation is browsed that container spans the whole chat, so its bottom
+  is the message input: the overlay's collapse button landed exactly on the send button. It
+  also observes the messages, which shrink as the input grows, so it follows a message that
+  spans several lines.
+- **It stays on top of the viewer and goes under dialogs.** Upstream's `z-index: 11000`
+  is there for the viewer, which the overlay was made to float over. Nothing else
+  layered over a browsed conversation should be covered by the call, so with the viewer
+  closed the overlay drops below the dialog layer (the modal mask is at 9998) and is back
+  as soon as the dialog is gone. A dialog and a floating call cannot both be uncovered:
+  the dialog wins, because it is modal and transient.
+- **It is rendered next to the whole main view**, outside the branch a lobby replaces.
+  Otherwise browsing a conversation whose lobby blocks the user takes the call off the
+  screen entirely - still running, with no way to see it or to leave it.
+- **Whatever a watcher sets up has to be seeded when the call view is created.** The call
+  view is created again during an ongoing call, on the way back from a browsed
+  conversation, so a watcher that only fires on changes never sees what was already true.
+  The shared screens are the case that bit: without them the big area falls back to the
+  promoted video, which renders the screen inside itself along with its own bottom bar, and
+  the presenter's name, the media indicators and "Stop following" end up drawn twice, over
+  each other. State the previous call view leaves behind needs the same care in the other
+  direction - the "start without media" default is consumed once per call rather than on
+  every mount, and the `RemoteVideoBlocker`s are destroyed unblocked.
+- **A small screen preview does not carry the mirroring placeholder.** It is a full size
+  empty content with a description and two buttons: in the overlay, at most 400px wide, it
+  does not fit and spills over the overlay's own controls. Only the big screen shows it,
+  where it can be read and where the mirroring it warns about is what the user is looking
+  at.
+
 ### Dropped: screen capture protection
 
 The fork used to carry a sixth change, excluding the Talk window from OS screen capture
