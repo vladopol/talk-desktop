@@ -277,11 +277,20 @@ Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
   from `@total-typescript/ts-reset` handing back `unknown` where the code assumed a type
   (`JSON.parse`, and the reason of a rejected promise). None were new - they had simply
   never been checked.
-- **`npm test` in `spreed` does not run on Node 25.** Every one of the 79 test files dies
-  in setup with `localStorage.getItem is not a function`, and a pristine `v24.0.4`
-  worktree fails exactly the same way, so it is the toolchain and not the fork. Confirm
-  that on the upstream tag before spending time on it, and use an older Node if the suite
-  is actually needed.
+- **`npm test` in `spreed` needs a flag on Node 25.** Without it every test file dies in
+  setup with `localStorage.getItem is not a function`: Node 25 ships its own Web Storage
+  and its `localStorage` throws unless a backing file is given, which shadows the one of
+  jsdom. A pristine `v24.0.4` worktree fails the same way, so it is the toolchain and not
+  the fork. Point it at a scratch file and the whole suite passes:
+
+  ```sh
+  NODE_OPTIONS="--localstorage-file=$(mktemp -u)" npm test -- run
+  ```
+
+  Use a **fresh** file per run - the storage is a real database that survives the run, and
+  a suite that reads what a previous run wrote fails (`settings.spec.js` does). Its lock is
+  also shared by the parallel workers, so a run can die with `database is locked`; that one
+  is a flake, re-run it.
 
 ## Verifying a build
 
@@ -291,6 +300,12 @@ before handing a build out:
 - install it on a clean machine of the target platform,
 - start a call and confirm changes 1 and 3,
 - confirm change 2 on Windows, where it is the only place it is active.
+
+Change 1 is worth walking through with a screen share running, as that is where it has
+broken so far: share a screen, browse another conversation, open a file and a dialog
+there, browse a conversation with a lobby, and come back to the call. Nothing may end up
+drawn twice or on top of the message input, and the call overlay has to stay reachable
+the whole time.
 
 Inspecting the artifacts is not a substitute for launching them. A macOS build that
 passed `codesign --verify --deep --strict` still died at launch, because that command
