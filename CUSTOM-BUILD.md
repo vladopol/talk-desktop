@@ -169,6 +169,7 @@ git clone https://github.com/vladopol/talk-desktop && cd talk-desktop
 git checkout build/custom
 git clone https://github.com/vladopol/spreed spreed
 git -C spreed checkout build/custom
+scripts/refresh-talk-l10n.sh spreed   # the workflow does this on its own
 npm ci
 npm ci --prefix spreed
 
@@ -184,6 +185,30 @@ otherwise it follows the host (arm64 on Apple Silicon):
 ./node_modules/.bin/electron-forge package --platform=linux --arch=x64
 ./node_modules/.bin/electron-forge make --skip-package --platform=linux --arch=x64 --targets=zip
 ```
+
+### Translations of the built-in Talk
+
+`scripts/refresh-talk-l10n.sh` replaces `l10n/` in the `spreed` clone with the one from
+upstream `stable34`, and the build workflow runs it right after checking the fork out.
+
+The reason is that the `spreed` branch sits on a release tag while translations keep
+landing in the branch that tag was cut from for months afterwards: at the v24.0.4 tag the
+Russian catalogue was 49 strings behind what upstream had already translated, and the
+whole set of languages 4700 lines behind. Nothing in this fork translates Talk itself, so
+there is nothing to merge - upstream's catalogue is simply the better one.
+
+Writing such a string by hand is the trap this replaces. The two labels of the mirroring
+warning were translated here on 27.08 and reverted the same day: upstream had already
+translated both with different wording, so the hand-written pair would have collided on
+the next rebase and the label would have changed under the users.
+
+What it costs: a `build-*` tag no longer pins the build completely. Only `l10n/` moves -
+the code of both repositories stays pinned to the tag - and the workflow log records the
+upstream commit the catalogue came from.
+
+The desktop client's own `l10n/` is not touched by any of this. It carries two
+hand-written Russian strings that upstream will never have, because they belong to
+change 5, which exists only here.
 
 Windows additionally needs the WiX Toolset v3.14 (which pulls in .NET Framework 3.5)
 with `C:\Program Files (x86)\WiX Toolset v3.14\bin\` on `PATH`.
@@ -311,8 +336,10 @@ Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
   on both sides of a rebase and account for every one that disappears.
 - **Are the fork-local Russian strings still there?** Change 5 adds two settings whose
   labels upstream does not know about, so their `ru` translations were written by hand in
-  `l10n/ru.js` and `l10n/ru.json`. Those files are regenerated from Transifex upstream and
-  the two entries disappear on a rebase - the settings then show up in English.
+  the desktop `l10n/ru.js` and `l10n/ru.json`. Those files are regenerated from Transifex
+  upstream and the two entries disappear on a rebase - the settings then show up in
+  English. This applies to the desktop repository only: the translations of the built-in
+  Talk are taken from upstream at build time, see above.
 - **Do the linters still pass?** The rebase pulls in a new dependency tree, and stylistic
   rules can get stricter without any upstream code change. `npm run lint` and
   `npm run ts:check` in both clones before tagging; the fixes belong in the commit that
