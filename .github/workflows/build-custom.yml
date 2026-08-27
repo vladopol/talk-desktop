@@ -32,6 +32,10 @@ env:
   SPREED_REPOSITORY: vladopol/spreed
   # On a tag build there are no inputs, so fall back to the integration branch
   SPREED_REF: ${{ inputs.spreed_ref || 'build/custom' }}
+  # Where the built-in Talk translations come from. Must be the upstream branch the
+  # release tag the spreed branch sits on was cut from - translations keep landing
+  # there for months after the tag, and nothing in this fork translates Talk itself.
+  TALK_L10N_REF: stable34
 
 concurrency:
   group: build-custom-${{ github.ref }}
@@ -53,6 +57,10 @@ jobs:
           repository: ${{ env.SPREED_REPOSITORY }}
           ref: ${{ env.SPREED_REF }}
           path: spreed
+
+      - name: Refresh the built-in Talk translations
+        shell: bash
+        run: bash scripts/refresh-talk-l10n.sh spreed "$TALK_L10N_REF"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -110,6 +118,10 @@ jobs:
           repository: ${{ env.SPREED_REPOSITORY }}
           ref: ${{ env.SPREED_REF }}
           path: spreed
+
+      - name: Refresh the built-in Talk translations
+        shell: bash
+        run: bash scripts/refresh-talk-l10n.sh spreed "$TALK_L10N_REF"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -189,6 +201,10 @@ jobs:
           repository: ${{ env.SPREED_REPOSITORY }}
           ref: ${{ env.SPREED_REF }}
           path: spreed
+
+      - name: Refresh the built-in Talk translations
+        shell: bash
+        run: bash scripts/refresh-talk-l10n.sh spreed "$TALK_L10N_REF"
 
       - name: Set up Node
         uses: actions/setup-node@v6
