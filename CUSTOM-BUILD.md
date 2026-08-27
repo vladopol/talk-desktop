@@ -5,7 +5,7 @@
 
 # Custom build
 
-This fork carries eight changes that are not in upstream Nextcloud Talk Desktop yet, and
+This fork carries seven changes that are not in upstream Nextcloud Talk Desktop yet, and
 builds unsigned distributables for Windows, macOS and Linux from them.
 
 The list is meant to shrink. Every change here is a patch to re-resolve on every
@@ -17,7 +17,7 @@ Everything here is specific to the fork. Nothing in this document applies to
 
 ## What is in the build
 
-Three of the changes live in the desktop client, five in the built-in Talk (`spreed`),
+Three of the changes live in the desktop client, four in the built-in Talk (`spreed`),
 which is bundled into the app at build time.
 
 | # | Change | Repository | Platforms |
@@ -29,7 +29,6 @@ which is bundled into the app at build time.
 | 5 | Let the "Do not disturb" user status silence notification banners, not only sounds and the call popup | talk-desktop | all |
 | 6 | Release the joined-conversation watcher when it fires synchronously on registration, so it cannot place an outgoing call nobody asked for ([talk-desktop#1777](https://github.com/nextcloud/talk-desktop/issues/1777)) | spreed | all |
 | 7 | Keep the participant stripe as the user set it when following a participant, instead of collapsing it ([spreed#19162](https://github.com/nextcloud/spreed/issues/19162)) | spreed | all |
-| 8 | Keep the mirroring warning of [spreed#18690](https://github.com/nextcloud/spreed/pull/18690) out of the small call overlay, where it spills over the controls | spreed | all |
 
 Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
 `koffi` FFI module, which is packaged for `win32` only.
