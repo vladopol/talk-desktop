@@ -38,8 +38,8 @@ Change 2 is Windows-only by nature: it enumerates windows through `user32` via t
 Change 1 is the largest patch here and the only one that rearranges the app's layout, so
 it is also the one that has broken in the field. Every rule below started as a bug report
 with a screenshot, and every one of them is easy to undo by accident when re-resolving the
-patch on a rebase. They live in `CallView.vue`, `ViewerOverlayCallView.vue`, `MainView.vue`
-and `ScreenShare.vue` in `spreed`.
+patch on a rebase. They live in `CallView.vue`, `ViewerOverlayCallView.vue`, `MainView.vue`,
+`EmptyCallView.vue` and `ScreenShare.vue` in `spreed`.
 
 - **A call view whose conversation is not the viewed one is always the compact overlay.**
   That is decided from the token in `CallView`, deliberately not from the `isViewerOverlay`
@@ -74,6 +74,12 @@ and `ScreenShare.vue` in `spreed`.
   does not fit and spills over the overlay's own controls. Only the big screen shows it,
   where it can be read and where the mirroring it warns about is what the user is looking
   at.
+- **Everything in the call view takes the call's token as a prop.** Upstream reads the
+  current conversation from the route wherever the call and the viewed conversation are
+  the same thing, which they no longer are. `EmptyCallView` was the one left doing it: in
+  an outgoing one-to-one call, browsing another conversation renamed the person being
+  called - the overlay announced "Waiting for ... to join the call" with the display name
+  of the browsed conversation.
 
 ### Dropped: screen capture protection
 
