@@ -384,6 +384,10 @@ there, browse a conversation with a lobby, and come back to the call. Nothing ma
 drawn twice or on top of the message input, and the call overlay has to stay reachable
 the whole time.
 
+Browse away from an outgoing one-to-one call before the other side picks up, too. That is
+the only moment the overlay shows the empty call view, and it named the browsed
+conversation there instead of the person being called.
+
 Inspecting the artifacts is not a substitute for launching them. A macOS build that
 passed `codesign --verify --deep --strict` still died at launch, because that command
 checks signature integrity and says nothing about whether the process is allowed to
