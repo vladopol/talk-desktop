@@ -218,24 +218,6 @@ jobs:
       - name: Install built-in Talk dependencies
         run: npm ci --prefix spreed
 
-      # appdmg -> ds-store -> macos-alias calls util.isDate(), one of the legacy
-      # util.is* helpers Node removed in v23, so the DMG maker cannot run on Node 24.
-      # macos-alias has been unmaintained since 2017, so patch the call site after
-      # install. Preloading a shim via NODE_OPTIONS is not an option: the runner
-      # refuses to set NODE_OPTIONS through $GITHUB_ENV.
-      - name: Patch macos-alias for Node 24
-        run: |
-          node - <<'PATCH'
-          const fs = require('node:fs')
-          const file = 'node_modules/macos-alias/lib/encode.js'
-          const source = fs.readFileSync(file, 'utf8')
-          const patched = source.replace('util.isDate(value)', "(Object.prototype.toString.call(value) === '[object Date]')")
-          if (patched === source) {
-            throw new Error(`No util.isDate call found in ${file} - the workaround is stale and should be removed`)
-          }
-          fs.writeFileSync(file, patched)
-          PATCH
-
       # Unsigned builds are ad-hoc signed by forge.config.js, so no certificates
       # or notarization credentials are needed here. Users allow the app once via
       # System Settings on first launch.
