@@ -287,17 +287,14 @@ eventually offer an update that drops these changes.
 
 ## Build workarounds
 
-Three problems in the toolchain are worked around in the workflow. All three were
-found by a failing build, and each one should be reconsidered rather than kept
-forever.
+Two problems in the toolchain are worked around in the workflow. Both were found by a
+failing build, and each one should be reconsidered rather than kept forever.
 
-**`macos-alias` and Node 24.** The dmg maker reaches `appdmg` → `ds-store` →
-`macos-alias`, which calls `util.isDate()` - one of the legacy `util.is*` helpers Node
-removed in v23. `macos-alias` has been unmaintained since 2017, so the workflow
-patches the call site after `npm ci`. The patch fails loudly if the call ever
-disappears. Note that preloading a shim through `NODE_OPTIONS` does *not* work on
-GitHub runners: setting `NODE_OPTIONS` via `$GITHUB_ENV` is refused outright. This
-goes away if upstream replaces `appdmg`.
+A third one is gone: the dmg maker reaches `appdmg` → `ds-store` → `macos-alias`, which
+used to call `util.isDate()`, one of the legacy `util.is*` helpers Node removed in v23,
+and the workflow patched the call site after `npm ci`. `macos-alias` 0.2.12, which
+v2.3.3 locks, no longer makes the call - the patch failed loudly on the `build-21` run,
+as it was written to, and was removed.
 
 **Missing SVG loader for the flatpak icon.** `flatpak build-export` validates
 application icons through gdk-pixbuf. The Ubuntu runner has no SVG loader, so the
