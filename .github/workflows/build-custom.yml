@@ -35,7 +35,7 @@ env:
   # Where the built-in Talk translations come from. Must be the upstream branch the
   # release tag the spreed branch sits on was cut from - translations keep landing
   # there for months after the tag, and nothing in this fork translates Talk itself.
-  TALK_L10N_REF: stable34
+  TALK_L10N_REF: stable35
 
 concurrency:
   group: build-custom-${{ github.ref }}
@@ -83,7 +83,7 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $wixBin
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --allow-git=all
 
       - name: Install built-in Talk dependencies
         run: npm ci --prefix spreed
@@ -147,7 +147,7 @@ jobs:
             org.electronjs.Electron2.BaseApp//25.08
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --allow-git=all
 
       - name: Install built-in Talk dependencies
         run: npm ci --prefix spreed
@@ -213,7 +213,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --allow-git=all
 
       - name: Install built-in Talk dependencies
         run: npm ci --prefix spreed

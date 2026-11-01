@@ -15,7 +15,7 @@
 set -euo pipefail
 
 talk_dir="${1:-spreed}"
-upstream_ref="${2:-stable34}"
+upstream_ref="${2:-stable35}"
 upstream_repo="https://github.com/nextcloud/spreed.git"
 
 cd "$talk_dir"
