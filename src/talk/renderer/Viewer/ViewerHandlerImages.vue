@@ -10,7 +10,7 @@ import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from
 import IconRotateLeft from 'vue-material-design-icons/RotateLeft.vue'
 import IconRotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewerHandlerMedia from './ViewerHandlerMedia.vue'
-import { generateFilePreviewUrl } from './viewer.utils.ts'
+import { generateFilePreviewUrl, generateUserFileDavUrl } from './viewer.utils.ts'
 
 const props = defineProps({
 	file: {
@@ -29,7 +29,14 @@ const ROTATION_STEP = 90
 // the settled scale back to exactly ZOOM_MIN.
 const SCALE_EPSILON = 0.01
 
-const src = computed(() => generateFilePreviewUrl(props.file.fileid, props.file.etag))
+// Set once the preview failed to load: the original file is shown instead
+const failed = ref(false)
+
+const src = computed(() => {
+	return failed.value
+		? generateUserFileDavUrl(props.file.filename)
+		: generateFilePreviewUrl(props.file.fileid, props.file.etag)
+})
 
 const panzoomWrapperRef = useTemplateRef('panzoomWrapper')
 const imageRef = useTemplateRef('image')
@@ -204,6 +211,14 @@ function onImageLoad(handleLoadEnd) {
  * @param {(withError?: boolean) => void} handleLoadEnd - Callback to signal load error
  */
 function onImageError(handleLoadEnd) {
+	// Fall back to the original file once before erroring out. A new src
+	// creates a new <img> (it is keyed by src), whose load measures the fit box
+	// and sets panzoom up again - the watcher on src has already torn down the
+	// state that belonged to the failed preview
+	if (!failed.value) {
+		failed.value = true
+		return
+	}
 	handleLoadEnd(true)
 	disposePanzoom()
 }
@@ -242,6 +257,10 @@ const actions = computed(() => [
 ])
 
 defineExpose({ actions })
+
+watch(() => props.file, () => {
+	failed.value = false
+})
 
 watch(src, () => {
 	disposePanzoom()
