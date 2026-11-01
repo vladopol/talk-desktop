@@ -5,7 +5,7 @@
 
 # Custom build
 
-This fork carries seven changes that are not in upstream Nextcloud Talk Desktop yet, and
+This fork carries six changes that are not in upstream Nextcloud Talk Desktop yet, and
 builds unsigned distributables for Windows, macOS and Linux from them.
 
 The list is meant to shrink. Every change here is a patch to re-resolve on every
@@ -17,7 +17,7 @@ Everything here is specific to the fork. Nothing in this document applies to
 
 ## What is in the build
 
-Three of the changes live in the desktop client, four in the built-in Talk (`spreed`),
+Three of the changes live in the desktop client, three in the built-in Talk (`spreed`),
 which is bundled into the app at build time.
 
 | # | Change | Repository | Platforms |
@@ -25,10 +25,14 @@ which is bundled into the app at build time.
 | 1 | Browse other conversations during a call, keeping the call alive via a second signaling session ([spreed#12299](https://github.com/nextcloud/spreed/issues/12299)) | spreed | all |
 | 2 | List and share minimized windows, which Chromium omits - needed for full-screen Remote Desktop windows ([talk-desktop#1788](https://github.com/nextcloud/talk-desktop/issues/1788)) | talk-desktop | Windows only |
 | 3 | Release the camera when video is disabled, so its hardware light goes out ([spreed#4008](https://github.com/nextcloud/spreed/issues/4008)) | spreed | all |
-| 4 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812)) | talk-desktop | all |
+| 4 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812), closed upstream in favour of [spreed#19504](https://github.com/nextcloud/spreed/pull/19504)) | talk-desktop | all |
 | 5 | Let the "Do not disturb" user status silence notification banners, not only sounds and the call popup | talk-desktop | all |
-| 6 | Release the joined-conversation watcher when it fires synchronously on registration, so it cannot place an outgoing call nobody asked for ([talk-desktop#1777](https://github.com/nextcloud/talk-desktop/issues/1777)) | spreed | all |
-| 7 | Keep the participant stripe as the user set it when following a participant, instead of collapsing it ([spreed#19162](https://github.com/nextcloud/spreed/issues/19162)) | spreed | all |
+| 6 | Keep the participant stripe as the user set it when following a participant, instead of collapsing it ([spreed#19162](https://github.com/nextcloud/spreed/issues/19162)) | spreed | all |
+
+Change 4 has an end date: upstream closed the pull request because the viewer is to be
+replaced by `@nextcloud/viewer` ([spreed#19504](https://github.com/nextcloud/spreed/pull/19504)),
+which brings zoom and rotation of its own. That is planned for Talk 36; once the desktop
+client ships it, drop change 4 rather than porting it.
 
 Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
 `koffi` FFI module, which is packaged for `win32` only.
@@ -113,6 +117,14 @@ never reports). Neither is worth carrying a patch for.
 The work is kept on `feat/screenshare-content-protection`, which is no longer merged
 into `build/custom`. It was last built into `build-14`.
 
+### Dropped: the joined-conversation watcher fix
+
+Up to `build-20` the fork also carried a fix for phantom outgoing calls
+([talk-desktop#1777](https://github.com/nextcloud/talk-desktop/issues/1777)), together with
+debug instrumentation that recorded where the auto-call came from. Upstream fixed the same
+bug in Talk v24.0.5 and v25.0.0 (the watcher is now registered with `{ immediate, once }`),
+so both were dropped on the v2.3.3 / v25.0.6 rebase.
+
 ## Branches
 
 Both repositories use a `build/custom` integration branch. Neither is merged into
@@ -120,17 +132,19 @@ Both repositories use a `build/custom` integration branch. Neither is merged int
 
 | Repository | Branch | Base | Built-in Talk |
 | ---------- | ------ | ---- | ------------- |
-| `vladopol/talk-desktop` | `build/custom` | upstream `v2.2.4` | - |
-| `vladopol/spreed` | `build/custom` | `v24.0.4` (tag on `stable34`) | v24.0.4 |
+| `vladopol/talk-desktop` | `build/custom` | upstream `v2.3.3` | - |
+| `vladopol/spreed` | `build/custom` | `v25.0.6` (tag on `stable35`) | v25.0.6 |
 
-`spreed` is built from `stable34` rather than `main`, because the desktop client's
-stable channel expects Talk v24.x (see the `talk` field in `package.json`). `main`
-carries an unreleased v25.0.0-dev, and the beta channel now points at v25.0.0-alpha.1.
+`spreed` is built from a `stable35` release tag rather than `main`, because the desktop
+client's stable channel bundles Talk v25.x: since v2.3 the built-in Talk is the
+`@nextcloud/talk` dependency in `package.json` (`github:nextcloud-releases/spreed#v25.0.6`
+for v2.3.3), and the `spreed` checkout next to it overrides that package at build time.
+The two have to name the same version.
 
 Both branches sit on release tags rather than on branch heads, so a build is
 reproducible from the tag alone. For `spreed` that means the base matches
-`talk.stable` in the desktop `package.json` exactly, at the price of leaving whatever
-has landed on `stable34` since the tag - 7 commits at the time of the v24.0.4 rebase.
+the `@nextcloud/talk` version in the desktop `package.json` exactly, at the price of
+leaving whatever has landed on `stable35` since the tag.
 
 The feature work itself lives on its own branches (`feat/screenshare-minimized-windows`,
 `feat/image-viewer-panzoom`, `feat/browse-during-call-*`,
@@ -176,13 +190,18 @@ git checkout build/custom
 git clone https://github.com/vladopol/spreed spreed
 git -C spreed checkout build/custom
 scripts/refresh-talk-l10n.sh spreed   # the workflow does this on its own
-npm ci
+npm ci --allow-git=all
 npm ci --prefix spreed
 
 npm run build:mac        && npm run package:mac         # dmg, on macOS
 npm run build:windows:x64 && npm run package:windows:x64 # msi + exe, on Windows
 npm run build:linux      && npm run package:linux        # flatpak + zip, on Linux
 ```
+
+`--allow-git=all` is needed since v2.3: the built-in Talk is a git dependency, and npm
+11.12 refuses to fetch it under the `allow-git=root` of the project's `.npmrc`
+("Fetching non-root packages of type git have been disabled"), even though it is a
+root dependency. The workflow passes the flag too; an npm that does not know it ignores it.
 
 Building the Linux zip from a non-Linux host needs an explicit architecture,
 otherwise it follows the host (arm64 on Apple Silicon):
@@ -195,7 +214,7 @@ otherwise it follows the host (arm64 on Apple Silicon):
 ### Translations of the built-in Talk
 
 `scripts/refresh-talk-l10n.sh` replaces `l10n/` in the `spreed` clone with the one from
-upstream `stable34`, and the build workflow runs it right after checking the fork out.
+upstream `stable35`, and the build workflow runs it right after checking the fork out.
 
 The reason is that the `spreed` branch sits on a release tag while translations keep
 landing in the branch that tag was cut from for months afterwards: at the v24.0.4 tag the
@@ -298,12 +317,14 @@ that produced no flatpak would still report success.
 
 1. Fetch upstream in both clones, tags included.
 2. Branch a backup off each `build/custom` before touching it, named after the base it
-   still sits on (`backup/build-custom-v223`, `backup/build-custom-v2403`).
-3. Rebase `build/custom` onto the new tag in both clones. The desktop branch sits on a
-   tag, so `git rebase v2.2.4` is enough; the `spreed` branch sits on a `stable34`
-   commit, so it needs `git rebase --onto v24.0.4 <old base> build/custom`.
-4. Check that the `spreed` base still matches the `talk` field in the desktop
-   `package.json`.
+   still sits on (`backup/build-custom-v224-final`, `backup/build-custom-v2404`).
+3. Rebase `build/custom` onto the new tag in both clones. Both branches sit on tags, so
+   `git rebase --onto <new tag> <old tag> build/custom` does it; when the release line
+   changes (`stable34` to `stable35`) the old tag is not an ancestor of the new one, and
+   `--onto` is what keeps upstream's commits in between out of the replay.
+4. Check that the `spreed` base still matches the `@nextcloud/talk` version in the
+   desktop `package.json`, and switch `TALK_L10N_REF` in the workflow and the default of
+   `scripts/refresh-talk-l10n.sh` to the branch the new `spreed` tag was cut from.
 5. Reinstall and run the checks below, then push both branches and a new `build-*` tag.
 
 Rebasing `build/custom` directly leaves the feature branches on the old base. That is
@@ -324,6 +345,30 @@ but an import line in `src/App.vue` or `src/views/MainView.vue`, against upstrea
 external-call teardown to the same `if` in `App.vue` that change 1 guards with
 `!skipLeavingPreviousConversation`, and the teardown belongs inside that guard, since it
 should only run when the conversation is actually being left.
+
+What the v2.3.3 / v25.0.6 rebase cost - the first one across a major Talk release:
+
+- `spreed` replayed 24 of 28 commits and conflicted on eight. Change 1 took most of them:
+  upstream rewrote `CallView` and `VideosGrid` (multi-speaker, the stripe as a card) and
+  moved typing, raised hands and speaking from Vuex into the Pinia
+  `participantActivityStore`. Typing kept change 1's attribution token on the new store
+  call (the parameter is now `isTyping`); `CallButton` became `<script setup>`, so its
+  one-line change was redone by hand; the root `div#call-container` needs both
+  upstream's activity handlers and change 1's overlay class. Upstream also started a
+  `CallView.spec.js` of its own: both suites now live in one file, on change 1's mocks,
+  with the tile promotion animation mocked out because it reads `matchMedia`, which jsdom
+  lacks. Change 3 and change 6 applied without a conflict.
+- The desktop replayed 34 of 35 commits. Only the manifests and the viewer conflicted:
+  `koffi` and `panzoom` went in by the surgical method of #1812 (upstream's lock already
+  carries panzoom and its dependencies as a transitive package, so only the
+  `dependencies` line was added), the media pagination in `ViewerApp` sits next to
+  `viewerRef`, and the conflict in the image handler was one of meaning, not of lines:
+  upstream falls back to the original file when the preview fails, keying the `<img>` by
+  `src`. The zoom commits were replayed with the fork's version of the file and the
+  fallback brought back on top in a commit of its own.
+- Dropped: change 6 of the old numbering (#1777) with its debug commits in both
+  repositories, and a translation commit that had been reverted - four `spreed` commits
+  and one desktop commit, all accounted for.
 
 Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
 
