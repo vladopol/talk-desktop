@@ -132,13 +132,13 @@ Both repositories use a `build/custom` integration branch. Neither is merged int
 
 | Repository | Branch | Base | Built-in Talk |
 | ---------- | ------ | ---- | ------------- |
-| `vladopol/talk-desktop` | `build/custom` | upstream `v2.3.3` | - |
-| `vladopol/spreed` | `build/custom` | `v25.0.6` (tag on `stable35`) | v25.0.6 |
+| `vladopol/talk-desktop` | `build/custom` | upstream `v2.3.4` | - |
+| `vladopol/spreed` | `build/custom` | `v25.0.7` (tag on `stable35`) | v25.0.7 |
 
 `spreed` is built from a `stable35` release tag rather than `main`, because the desktop
 client's stable channel bundles Talk v25.x: since v2.3 the built-in Talk is the
-`@nextcloud/talk` dependency in `package.json` (`github:nextcloud-releases/spreed#v25.0.6`
-for v2.3.3), and the `spreed` checkout next to it overrides that package at build time.
+`@nextcloud/talk` dependency in `package.json` (`github:nextcloud-releases/spreed#v25.0.7`
+for v2.3.4), and the `spreed` checkout next to it overrides that package at build time.
 The two have to name the same version.
 
 Both branches sit on release tags rather than on branch heads, so a build is
@@ -366,6 +366,23 @@ What the v2.3.3 / v25.0.6 rebase cost - the first one across a major Talk releas
 - Dropped: change 6 of the old numbering (#1777) with its debug commits in both
   repositories, and a translation commit that had been reverted - four `spreed` commits
   and one desktop commit, all accounted for.
+
+What the v2.3.4 / v25.0.7 rebase cost, a patch release on both sides: `spreed` replayed
+all 24 commits without a conflict. The desktop replayed 38 of 38, with one conflict in the
+manifests only - the `panzoom` line of change 4 next to upstream's `pinia` bump, both kept.
+Two things in that release touch the fork without conflicting, and are worth knowing:
+
+- **Electron fuses.** v2.3.4 turns on `EnableEmbeddedAsarIntegrityValidation` and
+  `OnlyLoadAppFromAsar` and turns off `RunAsNode`, `NODE_OPTIONS` and the inspector. The
+  ad-hoc macOS signature is unaffected (the fuses are flipped before signing, and
+  `ElectronAsarIntegrity` lands in `Info.plist`). Change 2 is the one to watch: `koffi` is
+  copied in by our `packageAfterCopy` hook before the asar is built and stays unpacked
+  through `asar.unpack`, so it should load - but that is only proven on Windows, by the
+  minimized windows showing up in the screen share picker.
+- **Login via the system browser** (Login Flow v2, upstream #2033) replaced the built-in
+  login window, and the old flow was deleted rather than kept behind a flag. The fork does
+  not touch authentication, so nothing to resolve - but a restored built-in login would be
+  a seventh patch, and a conflict-prone one.
 
 Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
 
