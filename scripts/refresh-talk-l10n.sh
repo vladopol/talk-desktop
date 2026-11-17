@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-talk_dir="${1:-spreed}"
+talk_dir="${1:-.overrides/spreed}"
 upstream_ref="${2:-stable35}"
 upstream_repo="https://github.com/nextcloud/spreed.git"
 

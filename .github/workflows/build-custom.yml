@@ -56,11 +56,11 @@ jobs:
         with:
           repository: ${{ env.SPREED_REPOSITORY }}
           ref: ${{ env.SPREED_REF }}
-          path: spreed
+          path: .overrides/spreed
 
       - name: Refresh the built-in Talk translations
         shell: bash
-        run: bash scripts/refresh-talk-l10n.sh spreed "$TALK_L10N_REF"
+        run: bash scripts/refresh-talk-l10n.sh .overrides/spreed "$TALK_L10N_REF"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -86,7 +86,7 @@ jobs:
         run: npm ci --allow-git=all
 
       - name: Install built-in Talk dependencies
-        run: npm ci --prefix spreed
+        run: npm ci --prefix .overrides/spreed
 
       - name: Package application
         run: npm run build:windows:x64
@@ -117,11 +117,11 @@ jobs:
         with:
           repository: ${{ env.SPREED_REPOSITORY }}
           ref: ${{ env.SPREED_REF }}
-          path: spreed
+          path: .overrides/spreed
 
       - name: Refresh the built-in Talk translations
         shell: bash
-        run: bash scripts/refresh-talk-l10n.sh spreed "$TALK_L10N_REF"
+        run: bash scripts/refresh-talk-l10n.sh .overrides/spreed "$TALK_L10N_REF"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -150,7 +150,7 @@ jobs:
         run: npm ci --allow-git=all
 
       - name: Install built-in Talk dependencies
-        run: npm ci --prefix spreed
+        run: npm ci --prefix .overrides/spreed
 
       - name: Package application
         run: npm run build:linux
@@ -200,11 +200,11 @@ jobs:
         with:
           repository: ${{ env.SPREED_REPOSITORY }}
           ref: ${{ env.SPREED_REF }}
-          path: spreed
+          path: .overrides/spreed
 
       - name: Refresh the built-in Talk translations
         shell: bash
-        run: bash scripts/refresh-talk-l10n.sh spreed "$TALK_L10N_REF"
+        run: bash scripts/refresh-talk-l10n.sh .overrides/spreed "$TALK_L10N_REF"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -216,7 +216,7 @@ jobs:
         run: npm ci --allow-git=all
 
       - name: Install built-in Talk dependencies
-        run: npm ci --prefix spreed
+        run: npm ci --prefix .overrides/spreed
 
       # Unsigned builds are ad-hoc signed by forge.config.js, so no certificates
       # or notarization credentials are needed here. Users allow the app once via

@@ -132,13 +132,18 @@ Both repositories use a `build/custom` integration branch. Neither is merged int
 
 | Repository | Branch | Base | Built-in Talk |
 | ---------- | ------ | ---- | ------------- |
-| `vladopol/talk-desktop` | `build/custom` | upstream `v2.3.4` | - |
-| `vladopol/spreed` | `build/custom` | `v25.0.7` (tag on `stable35`) | v25.0.7 |
+| `vladopol/talk-desktop` | `build/custom` | upstream `v2.3.5` | - |
+| `vladopol/spreed` | `build/custom` | `v25.0.8` (tag on `stable35`) | v25.0.8 |
 
 `spreed` is built from a `stable35` release tag rather than `main`, because the desktop
 client's stable channel bundles Talk v25.x: since v2.3 the built-in Talk is the
-`@nextcloud/talk` dependency in `package.json` (`github:nextcloud-releases/spreed#v25.0.7`
-for v2.3.4), and the `spreed` checkout next to it overrides that package at build time.
+`@nextcloud/talk` dependency in `package.json` (`github:nextcloud-releases/spreed#v25.0.8`
+for v2.3.5), and the `spreed` checkout in `.overrides/spreed/` overrides that package at
+build time. Since v2.3.5 that is the only place looked at (upstream #1926 dropped
+`TALK_PATH` and the `spreed/` folder in the repository root), and when it is missing the
+build falls back to the npm package **without an error** - a green build of stock Talk.
+The build log tells which one went in: `Packaged with built-in Nextcloud Talk v… on path:`
+has to end in `.overrides/spreed`.
 The two have to name the same version.
 
 Both branches sit on release tags rather than on branch heads, so a build is
@@ -187,11 +192,11 @@ can produce the dmg and the Linux zip, nothing else.
 ```sh
 git clone https://github.com/vladopol/talk-desktop && cd talk-desktop
 git checkout build/custom
-git clone https://github.com/vladopol/spreed spreed
-git -C spreed checkout build/custom
-scripts/refresh-talk-l10n.sh spreed   # the workflow does this on its own
+git clone https://github.com/vladopol/spreed .overrides/spreed
+git -C .overrides/spreed checkout build/custom
+scripts/refresh-talk-l10n.sh          # the workflow does this on its own
 npm ci --allow-git=all
-npm ci --prefix spreed
+npm ci --prefix .overrides/spreed
 
 npm run build:mac        && npm run package:mac         # dmg, on macOS
 npm run build:windows:x64 && npm run package:windows:x64 # msi + exe, on Windows
@@ -383,6 +388,15 @@ Two things in that release touch the fork without conflicting, and are worth kno
   login window, and the old flow was deleted rather than kept behind a flag. The fork does
   not touch authentication, so nothing to resolve - but a restored built-in login would be
   a seventh patch, and a conflict-prone one.
+
+What the v2.3.5 / v25.0.8 rebase cost: `spreed` replayed 24 of 24 and the desktop 39 of 39,
+no conflict on either side. The one thing that needed work did not conflict at all:
+upstream moved the spreed override from `spreed/` (or `TALK_PATH`) to `.overrides/spreed/`
+and made a missing override fall back silently to the npm package, so the workflow
+(checkout path, translations, `npm ci --prefix` in all three jobs), the default of
+`scripts/refresh-talk-l10n.sh` and the local clone had to move along. The same release
+also imports Talk as `@nextcloud/talk` instead of the `@talk` alias; nothing here imports
+`@talk/...`, so that change passed by.
 
 Things to check on every rebase, learned from the v2.2.3 and v2.2.4 ones:
 
