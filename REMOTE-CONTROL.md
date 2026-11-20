@@ -865,7 +865,8 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Built in CI on all platforms (run 44789199830); consent window spread wide on Windows |
 | `build-rc-8` | + consent window and banner keep the size requested | Built |
 | `build-rc-9` | + fixes from a code review (see the testing log) | Built in CI on all platforms (run 44795538408); tested 2026-11-20, everything works |
-| `build-rc-10` | + the button's tooltip in `<body>`, above the presenter's name | Current |
+| `build-rc-10` | + the button's tooltip in `<body>`, above the presenter's name | Superseded by rc-11 |
+| `build-rc-11` | + tooltips of all `title` attributes drawn by the page on macOS; the button uses `title` again | Current |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
@@ -991,6 +992,12 @@ an application window (window mode) works on a Windows presenter. Found:
   teleports it to `<body>` with `position: fixed`. On macOS, native `title` tooltips of Talk's
   buttons do not show at all (on Windows they do): that is why the button has its own tooltip.
   This affects stock Talk Desktop too and is outside this feature.
+  `build-rc-11` solves it for all of Talk: `src/talk/renderer/titleTooltips.ts` draws the tooltip
+  of any element with a `title` on macOS (hover after 0.5 s, keyboard focus; above the element or
+  below at the top edge; `title` moved to `data-title` while shown; follows title changes; hides on
+  click, scroll, Escape, blur). The cause of the missing native tooltips is not known: a search
+  found no matching Electron issue, and synthetic mouse moves do not trigger native tooltips, so it
+  could not be bisected here. It is a separate fix, a candidate for `build/custom` and its own PR.
 - On a Mac, the message asking to allow access disappears at once when starting a screen share.
   Under investigation. Every test build has a new ad-hoc signature, so macOS loses the Screen
   Recording grant just like the Accessibility one; `app:getDesktopCapturerSources` (stock
