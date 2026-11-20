@@ -6,6 +6,7 @@
 import { setupWebPage } from '../../shared/setupWebPage.js'
 import { setupScreenshareIndicator } from './screensharing/screenshareIndicator.ts'
 import { createTalkDesktopApp } from './TalkDesktop.app.ts'
+import { setupTitleTooltips } from './titleTooltips.ts'
 
 import '../../shared/assets/styles.css'
 import '@nextcloud/talk/src/icons.css'
@@ -15,6 +16,9 @@ await setupWebPage()
 
 // Mark the shared screen with a border while a screen is being shared
 setupScreenshareIndicator()
+
+// Native tooltips of title attributes do not show up on macOS
+setupTitleTooltips()
 
 await createTalkDesktopApp()
 
