@@ -200,12 +200,29 @@ async function handleRequest(requester: Requester) {
 		rcLog('decline', { from: requester.from, userId: requester.userId, why })
 	}
 
+	if (session || consentPending || isConsentWindowOpen()) {
+		return decline('busy')
+	}
+	// Taken before the first await: a second request arriving meanwhile is busy, it must not
+	// replace the consent window of the first one
+	consentPending = requester
+	try {
+		await askConsent(requester, decline)
+	} finally {
+		consentPending = null
+	}
+}
+
+/**
+ * The checks and the consent window of a request that holds the consent slot
+ *
+ * @param requester - Who asks
+ * @param decline - Declines the request
+ */
+async function askConsent(requester: Requester, decline: (why: RcDeclineReason) => void) {
 	const capability = await getCapability()
 	if (!capability.ok) {
 		return decline(capability.why === 'disabled' ? 'disabled' : 'unavailable')
-	}
-	if (session || consentPending || isConsentWindowOpen()) {
-		return decline('busy')
 	}
 	const history = requestHistory.get(requester.from) ?? { at: 0, declines: 0 }
 	const now = Date.now()
@@ -221,8 +238,10 @@ async function handleRequest(requester: Requester) {
 		return decline('unavailable')
 	}
 
-	consentPending = requester
-	const shortcut = globalShortcut.isRegistered(REVOKE_ACCELERATOR) || registerRevokeShortcut()
+	// Registered for the consent window, to tell whether it is free. Kept for the session,
+	// released when no session follows.
+	const registeredHere = !globalShortcut.isRegistered(REVOKE_ACCELERATOR) && registerRevokeShortcut()
+	const shortcut = registeredHere || globalShortcut.isRegistered(REVOKE_ACCELERATOR)
 	const clipboardAllowed = getAppConfig('remoteControlClipboard') !== false
 	rcLog('consent-shown', { from: requester.from, userId: requester.userId, source: source.kind })
 	const result = await showConsentWindow({
@@ -234,13 +253,12 @@ async function handleRequest(requester: Requester) {
 		shortcut,
 		windowMode: source.kind === 'window',
 	})
-	consentPending = null
-	if (!shortcut) {
-		globalShortcut.unregister(REVOKE_ACCELERATOR)
-	}
 
 	// Everything may have changed while the window was open
 	if (!result.allow || sharedSourceId !== sourceId || session) {
+		if (registeredHere && !session) {
+			globalShortcut.unregister(REVOKE_ACCELERATOR)
+		}
 		history.declines++
 		return decline(result.why === 'timeout' ? 'timeout' : 'user')
 	}
@@ -627,7 +645,9 @@ function handleInput(from: string, raw: unknown) {
 		current.lastHeartbeat = performance.now()
 		return
 	}
-	if (offset - current.minClockOffset > LIMITS.LATE_EVENT && input.op !== 'rel' && input.op !== 'clip') {
+	// A release is never late: a key or a button must not stay down on the presenter
+	const isRelease = (input.op === 'key' || input.op === 'btn') && !input.d
+	if (offset - current.minClockOffset > LIMITS.LATE_EVENT && input.op !== 'rel' && input.op !== 'clip' && !isRelease) {
 		return
 	}
 
@@ -897,6 +917,8 @@ function isPasteShortcut(code: string) {
 	return (commandHeld && code === 'KeyV') || (shiftHeld && code === 'Insert')
 }
 
+const watchedForDestroy = new WeakSet<Electron.WebContents>()
+
 /**
  * Start or stop capturing keys in a Talk window for a remote control session
  *
@@ -948,11 +970,15 @@ function setCapture(webContents: WebContents, options: { presenterOs: RcOs, mapM
 		webContents.send('remoteControl:capturedKey', code, down)
 	}
 	webContents.on('before-input-event', listener)
-	webContents.once('destroyed', () => {
-		if (capture?.webContents === webContents) {
-			capture = null
-		}
-	})
+	// Once per window: setCapture runs on every focus change of the layer
+	if (!watchedForDestroy.has(webContents)) {
+		watchedForDestroy.add(webContents)
+		webContents.once('destroyed', () => {
+			if (capture?.webContents === webContents) {
+				capture = null
+			}
+		})
+	}
 	capture = { webContents, ...options, listener }
 }
 
