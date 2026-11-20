@@ -40,6 +40,13 @@ export type BuildConfigFile = {
 	multiAccount: boolean
 
 	/**
+	 * Whether a participant sharing a screen can give another participant control over it.
+	 * See REMOTE-CONTROL.md. false removes the feature from the build entirely.
+	 * Default: true
+	 */
+	remoteControl: boolean
+
+	/**
 	 * Brand color.
 	 * Used in icons generation, installers and the splash screen.
 	 * Default: '#0082C9'

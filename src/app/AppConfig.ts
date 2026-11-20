@@ -110,7 +110,17 @@ export type AppConfig = {
 	// Privacy settings
 	// ----------------
 
-	// Nothing yet...
+	/**
+	 * Whether other call participants may be given control over a shared screen or window.
+	 * Each session still needs the user's consent.
+	 * Default: true
+	 */
+	allowRemoteControl: boolean
+	/**
+	 * Whether text can be exchanged through the clipboard while someone controls the screen.
+	 * Default: true
+	 */
+	remoteControlClipboard: boolean
 
 	// ----------------------
 	// Notifications settings
@@ -184,6 +194,8 @@ const defaultAppConfig: AppConfig = {
 	systemTitleBar: false,
 	monochromeTrayIcon: isMac,
 	zoomFactor: 1,
+	allowRemoteControl: true,
+	remoteControlClipboard: true,
 	showNotificationChat: 'respect-dnd',
 	showNotificationCall: 'respect-dnd',
 	playSoundChat: 'respect-dnd',

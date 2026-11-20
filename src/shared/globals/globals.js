@@ -5,7 +5,9 @@
 
 import { translate, translatePlural } from '@nextcloud/l10n'
 import { appData } from '../../app/AppData.js'
+import { remoteControl } from '../../remote-control/talk/index.ts'
 import { getDesktopMediaSource } from '../../talk/renderer/screensharing/screensharing.module.ts'
+import { BUILD_CONFIG } from '../build.config.ts'
 import { dialogs } from './OC/dialogs.js'
 import { MimeTypeList } from './OC/mimetype.js'
 
@@ -91,6 +93,9 @@ const OCA = {
 	Talk: {
 		Desktop: {
 			getDesktopMediaSource,
+			// Remote control during screen sharing, see REMOTE-CONTROL.md. Left out when the
+			// build disables it, and Talk then shows nothing of it.
+			remoteControl: BUILD_CONFIG.remoteControl !== false ? remoteControl : undefined,
 		},
 	},
 }

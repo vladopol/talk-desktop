@@ -2,6 +2,7 @@
 	"applicationName": "Nextcloud Talk",
 	"domain": null,
 	"enforceDomain": false,
+	"remoteControl": true,
 	"brandColor": "#0082C9",
 	"brandGradient": "linear-gradient(40deg, #0082c9 0%, #1cafff 100%)",
 	"brandFontColor": "#FFFFFF",

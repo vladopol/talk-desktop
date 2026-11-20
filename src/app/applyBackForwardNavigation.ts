@@ -5,6 +5,8 @@
 
 import type { BrowserWindow } from 'electron'
 
+import { isCapturingInput } from '../remote-control/session.main.ts'
+
 /**
  * Apply back and forward shortcuts navigation handling
  *
@@ -12,6 +14,11 @@ import type { BrowserWindow } from 'electron'
  */
 export function applyBackForwardNavigation(window: BrowserWindow) {
 	window.webContents.on('before-input-event', (event, input) => {
+		// Keys go to the presenter's computer during remote control
+		if (isCapturingInput(window.webContents)) {
+			return
+		}
+
 		const { navigationHistory } = window.webContents
 
 		const isMac = process.platform === 'darwin'

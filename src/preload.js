@@ -115,6 +115,51 @@ const TALK_DESKTOP = {
 	 */
 	setScreenshareIndicator: (sourceId) => ipcRenderer.send('app:setScreenshareIndicator', sourceId),
 	/**
+	 * Remote control during screen sharing, see REMOTE-CONTROL.md.
+	 * A narrow API: the main process keeps the session and re-checks everything sent here.
+	 */
+	remoteControl: {
+		/** @return {Promise<{ os: string, src: string|null, ok: boolean, why?: string }>} */
+		capability: () => ipcRenderer.invoke('remoteControl:capability'),
+		/** @param {string|null} sourceId - The sourceId being shared, or null */
+		share: (sourceId) => ipcRenderer.send('remoteControl:share', sourceId),
+		/** @param {{ from: string, userId: string, name: string, os: string }} requester - Who asks for control */
+		request: (requester) => ipcRenderer.send('remoteControl:request', requester),
+		/**
+		 * @param {string} from - Server-set signaling session id of the sender
+		 * @param {object} message - The rc message
+		 */
+		input: (from, message) => ipcRenderer.send('remoteControl:input', from, message),
+		ping: () => ipcRenderer.send('remoteControl:ping'),
+		/** @param {string} why - Why */
+		revoke: (why) => ipcRenderer.send('remoteControl:revoke', why),
+		/** @param {string} sessionId - Signaling session id of a participant who left the call */
+		participantLeft: (sessionId) => ipcRenderer.send('remoteControl:participantLeft', sessionId),
+		requestPermission: () => ipcRenderer.send('remoteControl:requestPermission'),
+		/** @param {{ presenterOs: string, mapModifiers: boolean, clipboard: boolean }|null} options - Capture keys, or null to stop */
+		capture: (options) => ipcRenderer.send('remoteControl:capture', options),
+		/** @param {string} text - Text from the presenter's clipboard */
+		writeClipboard: (text) => ipcRenderer.send('remoteControl:writeClipboard', text),
+		/** @param {{ allow: boolean, clipboard: boolean }} result - The consent window's answer */
+		consentResult: (result) => ipcRenderer.send('remoteControl:consentResult', result),
+		/** @param {'take-back'|'bring-to-front'} action - A banner button */
+		bannerAction: (action) => ipcRenderer.send('remoteControl:bannerAction', action),
+		bannerState: () => ipcRenderer.invoke('remoteControl:bannerState'),
+		/**
+		 * Subscribe to an event from the main process
+		 *
+		 * @param {'send'|'hostSession'|'capturedKey'|'capturedPaste'|'banner'} name - Event
+		 * @param {Function} callback - Called with the event arguments
+		 * @return {() => void} Unsubscribe
+		 */
+		on: (name, callback) => {
+			const channel = 'remoteControl:' + name
+			const handler = (event, ...args) => callback(...args)
+			ipcRenderer.on(channel, handler)
+			return () => ipcRenderer.removeListener(channel, handler)
+		},
+	},
+	/**
 	 * Relaunch an entire application
 	 */
 	relaunch: () => ipcRenderer.send('app:relaunch'),

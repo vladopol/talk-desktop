@@ -176,9 +176,9 @@ module.exports = {
 		},
 
 		packageAfterCopy(_forgeConfig, buildPath, _electronVersion, platform, arch) {
-			// koffi is only loaded on Windows (see src/app/nativeWindows.ts), so there is no
-			// reason to ship the native module on other platforms.
-			if (platform !== 'win32') {
+			// koffi is loaded on Windows (src/app/nativeWindows.ts, src/remote-control) and on
+			// macOS (src/remote-control/injector.mac.ts), not on Linux.
+			if (platform !== 'win32' && platform !== 'darwin') {
 				return
 			}
 
@@ -190,13 +190,16 @@ module.exports = {
 			const koffiSource = path.join(__dirname, 'node_modules', 'koffi')
 			const koffiTarget = path.join(buildPath, 'node_modules', 'koffi')
 			const prebuiltsPrefix = `build${path.sep}koffi${path.sep}`
-			const keepTriplet = `${platform}_${arch}`
+			// The universal macOS app is merged from an x64 and an arm64 build, and
+			// @electron/universal only merges files that are identical on both sides or
+			// differ as Mach-O binaries: ship both macOS prebuilts in both builds.
+			const keepTriplets = platform === 'darwin' ? ['darwin_x64', 'darwin_arm64'] : [`${platform}_${arch}`]
 			fs.cpSync(koffiSource, koffiTarget, {
 				recursive: true,
 				filter: (source) => {
 					const relative = path.relative(koffiSource, source)
 					if (relative.startsWith(prebuiltsPrefix)) {
-						return relative.slice(prebuiltsPrefix.length).split(path.sep)[0] === keepTriplet
+						return keepTriplets.includes(relative.slice(prebuiltsPrefix.length).split(path.sep)[0])
 					}
 					return true
 				},
@@ -240,6 +243,12 @@ module.exports = {
 		// Unpack the koffi native FFI module (its prebuilt .node cannot run from inside the asar archive)
 		asar: {
 			unpack: '**/node_modules/koffi/**',
+		},
+		// Both builds of the universal app carry both single-architecture koffi prebuilts
+		// (see packageAfterCopy); they are identical, which @electron/universal only
+		// accepts for files it is told about
+		osxUniversal: {
+			x64ArchFiles: '**/node_modules/koffi/build/koffi/**',
 		},
 
 		// Windows
@@ -659,6 +668,14 @@ module.exports = {
 							name: 'talk_desktop__window_callbox',
 							html: './src/callbox/renderer/callbox.html',
 							js: './src/callbox/renderer/callbox.main.ts',
+							preload: {
+								js: './src/preload.js',
+							},
+						},
+						{
+							name: 'talk_desktop__window_remote_control',
+							html: './src/remote-control/renderer/remoteControl.html',
+							js: './src/remote-control/renderer/remoteControl.main.ts',
 							preload: {
 								js: './src/preload.js',
 							},

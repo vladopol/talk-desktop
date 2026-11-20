@@ -6,6 +6,7 @@
 import type AppGetDesktopMediaSource from './AppGetDesktopMediaSource.vue'
 
 import { createApp } from 'vue'
+import { setPickedSourceId } from '../../../remote-control/talk/host.ts'
 
 let appGetDesktopMediaSourceInstance: InstanceType<typeof AppGetDesktopMediaSource> | null = null
 
@@ -21,5 +22,8 @@ export async function getDesktopMediaSource() {
 		appGetDesktopMediaSourceInstance = createApp(AppGetDesktopMediaSource).mount(container) as InstanceType<typeof AppGetDesktopMediaSource>
 	}
 
-	return appGetDesktopMediaSourceInstance.promptDesktopMediaSource()
+	const result = await appGetDesktopMediaSourceInstance.promptDesktopMediaSource()
+	// Remote control needs to know what is being shared
+	setPickedSourceId(result.sourceId)
+	return result
 }

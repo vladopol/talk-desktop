@@ -28,6 +28,7 @@ const { createAuthenticationWindow } = require('./authentication/authentication.
 const { createCallboxWindow } = require('./callbox/callbox.window.ts')
 const { createHelpWindow } = require('./help/help.window.js')
 const { installVueDevtools } = require('./install-vue-devtools.js')
+const { setupRemoteControl } = require('./remote-control/session.main.ts')
 const { BUILD_CONFIG } = require('./shared/build.config.ts')
 const { createTalkWindow } = require('./talk/talk.window.js')
 const { createUpgradeWindow } = require('./upgrade/upgrade.window.ts')
@@ -248,6 +249,9 @@ ipcMain.handle('app:activateWindowForCapture', async (event, source) => {
 let isInWindowRelaunch = false
 
 app.whenReady().then(async () => {
+	// Remote control during screen sharing, see REMOTE-CONTROL.md
+	setupRemoteControl()
+
 	await loadAppConfig()
 	await runMigrations()
 

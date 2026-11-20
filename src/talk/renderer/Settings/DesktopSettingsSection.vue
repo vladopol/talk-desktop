@@ -18,6 +18,7 @@ import DesktopSettingsSectionRelaunchNote from './components/DesktopSettingsSect
 import UiFormBoxAudioOutput from './components/UiFormBoxAudioOutput.vue'
 import UiFormBoxSelectNative from './components/UiFormBoxSelectNative.vue'
 import UiFormGroupZoom from './components/UiFormGroupZoom.vue'
+import { BUILD_CONFIG } from '../../../shared/build.config.ts'
 import { usePrefersContrastMore } from '../../../shared/usePrefersContrastMore.ts'
 import { useAppConfigStore } from './appConfig.store.ts'
 import { useAppConfigValue } from './useAppConfigValue.ts'
@@ -25,6 +26,8 @@ import { useLaunchAtStartup } from './useLaunchAtStartup.ts'
 import { useTristateToggle } from './useTristateToggle.ts'
 
 const isLinux = window.systemInfo.isLinux
+const isMac = window.systemInfo.isMac
+const isWindows = window.systemInfo.isWindows
 
 const { isRelaunchRequired } = storeToRefs(useAppConfigStore())
 
@@ -65,6 +68,13 @@ const notificationLevelOptions = [
 
 const secondarySpeaker = useAppConfigValue('secondarySpeaker')
 const secondarySpeakerDevice = useAppConfigValue('secondarySpeakerDevice')
+
+const remoteControlAvailable = BUILD_CONFIG.remoteControl !== false && (isWindows || isMac)
+const allowRemoteControl = useAppConfigValue('allowRemoteControl')
+const remoteControlClipboard = useAppConfigValue('remoteControlClipboard')
+const remoteControlDescription = isMac
+	? t('talk_desktop', 'You confirm every time. Needs the Accessibility permission; after installing a new version of the app, remove it in System Settings → Privacy & Security → Accessibility and add it again.')
+	: t('talk_desktop', 'You confirm every time')
 </script>
 
 <template>
@@ -119,6 +129,19 @@ const secondarySpeakerDevice = useAppConfigValue('secondarySpeakerDevice')
 		</NcFormGroup>
 
 		<UiFormGroupZoom v-model="zoomFactor" />
+
+		<NcFormGroup v-if="remoteControlAvailable" :label="t('talk_desktop', 'Screen sharing')">
+			<NcFormBox>
+				<NcFormBoxSwitch
+					v-model="allowRemoteControl"
+					:label="t('talk_desktop', 'Allow giving control of a shared screen')"
+					:description="remoteControlDescription" />
+				<NcFormBoxSwitch
+					v-if="allowRemoteControl"
+					v-model="remoteControlClipboard"
+					:label="t('talk_desktop', 'Shared clipboard (text) while controlled')" />
+			</NcFormBox>
+		</NcFormGroup>
 
 		<NcFormGroup :label="t('talk_desktop', 'Notifications & Sounds')">
 			<NcFormBox>
