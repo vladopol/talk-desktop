@@ -863,7 +863,8 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-5` | + every first `hello` answered, early `cap` kept, layer waits for the module | Cancelled in favour of rc-6 |
 | `build-rc-6` | + "Request control" moved to the call's bottom bar | Built in CI on all platforms (run 44758087728), plus a local dmg; tested 2026-11-20 |
 | `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Built in CI on all platforms (run 44789199830); consent window spread wide on Windows |
-| `build-rc-8` | + consent window and banner keep the size requested | Current |
+| `build-rc-8` | + consent window and banner keep the size requested | Built |
+| `build-rc-9` | + fixes from a code review (see the testing log) | Current |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
@@ -969,6 +970,21 @@ an application window (window mode) works on a Windows presenter. Found:
   window reports a pixel or so more than set: every round made it wider, the text reflowed and
   asked for the next round. Fixed in `build-rc-8`: the requested size is kept per window
   (`windowSizes`) and never read back.
+- A code review of the branch (2026-11-20) found, and `build-rc-9` fixes:
+  - every click sent `rel`, which released held keys: the pointer capture is lost after each
+    mouseup. Ctrl+click and Ctrl+C after a click did not work;
+  - late key and button releases were dropped by the late-event filter, which could leave a key
+    or a button down on the presenter;
+  - the revoke shortcut stayed registered after a declined request;
+  - two requests close together could both reach the consent step, the second closing the
+    first's window;
+  - Linux: `screen.dipToScreenRect` is Windows only, every input threw;
+  - macOS: clicks on the desktop picture and icons were refused as outside;
+  - the request button did not follow the session state (non-reactive fields);
+  - after heartbeats came back the controller showed 'active' even when the presenter had paused;
+  - a 'destroyed' listener was added on every focus change.
+  The spreed commit with the button also carried 156 translation files staged by mistake; they are
+  reverted in a follow-up commit and kept as uncommitted changes, as before.
 - On a Mac, the message asking to allow access disappears at once when starting a screen share.
   Under investigation. Every test build has a new ad-hoc signature, so macOS loses the Screen
   Recording grant just like the Accessibility one; `app:getDesktopCapturerSources` (stock
