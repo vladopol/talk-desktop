@@ -22,7 +22,8 @@ export type RcRevokeReason = 'user' | 'share-ended' | 'left-call' | 'hb-lost' | 
 
 type Base<Op extends string> = { type: typeof RC_TYPE, v: typeof RC_VERSION, op: Op, seq: number, t: number }
 
-export type RcHello = Base<'hello'> & { roles: ('host' | 'ctl')[], os: RcOs }
+/** re: an answer to a hello, which is not answered again */
+export type RcHello = Base<'hello'> & { roles: ('host' | 'ctl')[], os: RcOs, re?: boolean }
 export type RcCap = Base<'cap'> & { src: RcSourceKind | null, ok: boolean, why?: string }
 export type RcRequest = Base<'request'>
 export type RcAccept = Base<'accept'> & { sid: string, os: RcOs, src: RcSourceKind, clip: boolean }
@@ -123,6 +124,7 @@ export function parseRcMessage(raw: unknown): RcMessage | null {
 	switch (raw.op) {
 		case 'hello':
 			return Array.isArray(raw.roles) && raw.roles.length <= 2 && raw.roles.every((role) => oneOf(role, ['host', 'ctl'])) && oneOf(raw.os, ['win', 'mac', 'linux'])
+				&& (raw.re === undefined || typeof raw.re === 'boolean')
 				? raw as RcHello
 				: null
 		case 'cap':

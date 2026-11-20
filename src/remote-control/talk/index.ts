@@ -37,6 +37,8 @@ type Connection = {
 }
 
 let connection: Connection | null = null
+/** Resolved once the module is attached to the call's signaling */
+const connectionReady = Promise.withResolvers<void>()
 let ownOs: RcOs | null = null
 
 /**
@@ -68,8 +70,10 @@ async function attach(options: AttachOptions) {
 	const helloSent = new Set<string>()
 	const call = { inCall: !!signaling.currentCallToken }
 
-	const sendHello = (to: string) => {
-		if (channel.send(to, { op: 'hello', roles: getRoles(), os: ownOs! })) {
+	/** cap that arrived before the hello of its sender */
+	const pendingCaps = new Map<string, Peer['cap']>()
+	const sendHello = (to: string, re = false) => {
+		if (channel.send(to, { op: 'hello', roles: getRoles(), os: ownOs!, ...(re ? { re } : {}) })) {
 			helloSent.add(to)
 		}
 	}
@@ -87,6 +91,7 @@ async function attach(options: AttachOptions) {
 	const onRemove = (_: unknown, model: SpreedParticipant) => {
 		const peerId = model.attributes.peerId
 		peers.delete(peerId)
+		pendingCaps.delete(peerId)
 		helloSent.delete(peerId)
 		client.states.delete(peerId)
 	}
@@ -99,6 +104,7 @@ async function attach(options: AttachOptions) {
 		window.TALK_DESKTOP.remoteControl.revoke('left-call')
 		client.stop('left-call')
 		peers.clear()
+		pendingCaps.clear()
 		helloSent.clear()
 	}
 	// After a reconnect the other side may have missed everything
@@ -116,17 +122,26 @@ async function attach(options: AttachOptions) {
 		}
 		if (message.op === 'hello') {
 			const peer = peers.get(from)
-			peers.set(from, { roles: message.roles, os: message.os, cap: peer?.cap ?? null })
-			if (!helloSent.has(from)) {
-				sendHello(from)
+			peers.set(from, { roles: message.roles, os: message.os, cap: peer?.cap ?? pendingCaps.get(from) ?? null })
+			pendingCaps.delete(from)
+			console.info('[remote-control] hello from', from, message.roles, message.os, message.re ? '(answer)' : '')
+			// Our own hello may have been dropped: the other side only accepts messages from
+			// participants it already sees in the call, and both sides learn about each other
+			// at slightly different times. Every first hello is answered, answers are not.
+			if (!message.re) {
+				sendHello(from, true)
 			}
 			if (message.roles.includes('ctl')) {
 				host.sendCap(from)
 			}
 		} else if (message.op === 'cap') {
+			const cap = { src: message.src, ok: message.ok, ...(message.why ? { why: message.why } : {}) }
+			console.info('[remote-control] cap from', from, cap)
 			const peer = peers.get(from)
 			if (peer) {
-				peer.cap = { src: message.src, ok: message.ok, ...(message.why ? { why: message.why } : {}) }
+				peer.cap = cap
+			} else {
+				pendingCaps.set(from, cap)
 			}
 		}
 	})
@@ -157,6 +172,7 @@ async function attach(options: AttachOptions) {
 		},
 	}
 	connection = current
+	connectionReady.resolve()
 	if (call.inCall) {
 		helloEveryone()
 	}
@@ -174,7 +190,8 @@ function mountScreen(options: MountScreenOptions): () => void {
 	let app: ReturnType<typeof createApp> | null = null
 	let disposed = false
 
-	import('./RemoteControlLayer.vue').then(({ default: RemoteControlLayer }) => {
+	// A screen share can be shown before the module is attached to the signaling
+	Promise.all([import('./RemoteControlLayer.vue'), connectionReady.promise]).then(([{ default: RemoteControlLayer }]) => {
 		if (disposed || !connection) {
 			return
 		}
