@@ -862,7 +862,7 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Built (macOS job lost to GitHub runner capacity; dmg built locally) |
 | `build-rc-5` | + every first `hello` answered, early `cap` kept, layer waits for the module | Cancelled in favour of rc-6 |
 | `build-rc-6` | + "Request control" moved to the call's bottom bar | Built in CI on all platforms (run 44758087728), plus a local dmg; tested 2026-11-20 |
-| `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Current (run 44789199830) |
+| `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Current; built in CI on all platforms (run 44789199830) |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
