@@ -8,7 +8,7 @@ import type { Peer } from './channel.ts'
 import type { Client } from './client.ts'
 
 import { t } from '@nextcloud/l10n'
-import { computed, useId } from 'vue'
+import { computed, onBeforeUnmount, ref, useId } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import IconCursorDefaultClick from 'vue-material-design-icons/CursorDefaultClick.vue'
@@ -26,6 +26,35 @@ const props = defineProps<{
 }>()
 
 const tooltipId = `rc-call-button-tooltip-${useId()}`
+
+// The tooltip lives in <body>: inside the bottom bar it was under the presenter's name over
+// the screen share, whatever its z-index. Native title tooltips do not show up on macOS.
+const wrapper = ref<HTMLElement | null>(null)
+const tooltip = ref<{ left: number, bottom: number } | null>(null)
+let tooltipTimer: number | undefined
+
+/**
+ * Show the tooltip above the button after a short hover
+ */
+function showTooltip() {
+	clearTimeout(tooltipTimer)
+	tooltipTimer = window.setTimeout(() => {
+		const rect = wrapper.value?.getBoundingClientRect()
+		if (rect) {
+			tooltip.value = { left: rect.left + rect.width / 2, bottom: window.innerHeight - rect.top + 6 }
+		}
+	}, 400)
+}
+
+/**
+ * Hide the tooltip
+ */
+function hideTooltip() {
+	clearTimeout(tooltipTimer)
+	tooltip.value = null
+}
+
+onBeforeUnmount(hideTooltip)
 
 const presenter = computed(() => props.client.view.presenter)
 const peer = computed(() => presenter.value ? props.peers.get(presenter.value) : undefined)
@@ -62,8 +91,16 @@ function onClick() {
 </script>
 
 <template>
-	<!-- Its own tooltip: the native one from title did not show up in the call -->
-	<div v-if="visible" class="rc-call-button">
+	<!-- Its own tooltip: native title tooltips do not show up on macOS -->
+	<div
+		v-if="visible"
+		ref="wrapper"
+		class="rc-call-button"
+		@mouseenter="showTooltip"
+		@mouseleave="hideTooltip"
+		@focusin="showTooltip"
+		@focusout="hideTooltip"
+		@click="hideTooltip">
 		<NcButton
 			:variant="inSession ? 'primary' : 'tertiary'"
 			:disabled="!inSession && !canRequest"
@@ -76,7 +113,16 @@ function onClick() {
 				<IconCursorDefaultClickOutline v-else :size="20" />
 			</template>
 		</NcButton>
-		<span :id="tooltipId" role="tooltip" class="rc-call-button__tooltip">{{ label }}</span>
+		<Teleport to="body">
+			<span
+				v-show="tooltip"
+				:id="tooltipId"
+				role="tooltip"
+				class="rc-call-button__tooltip"
+				:style="tooltip ? { left: `${tooltip.left}px`, bottom: `${tooltip.bottom}px` } : undefined">
+				{{ label }}
+			</span>
+		</Teleport>
 	</div>
 </template>
 
@@ -86,12 +132,15 @@ function onClick() {
 	display: inline-flex;
 }
 
+/* A disabled button swallows the hover: let it reach the wrapper, which shows the reason */
+.rc-call-button :deep(button:disabled) {
+	pointer-events: none;
+}
+
 .rc-call-button__tooltip {
-	position: absolute;
-	bottom: calc(100% + var(--default-grid-baseline));
-	inset-inline-start: 50%;
+	position: fixed;
 	transform: translateX(-50%);
-	z-index: 100;
+	z-index: 100000;
 	width: max-content;
 	max-width: 320px;
 	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
@@ -103,15 +152,5 @@ function onClick() {
 	line-height: 1.3;
 	text-align: center;
 	pointer-events: none;
-	opacity: 0;
-	visibility: hidden;
-	transition: opacity 0.15s, visibility 0.15s;
-}
-
-.rc-call-button:hover .rc-call-button__tooltip,
-.rc-call-button:focus-within .rc-call-button__tooltip {
-	opacity: 1;
-	visibility: visible;
-	transition-delay: 0.4s;
 }
 </style>
