@@ -35,15 +35,34 @@ which brings zoom and rotation of its own. That is planned for Talk 36; once the
 client ships it, drop change 4 rather than porting it.
 
 Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
-`koffi` FFI module, which is packaged for `win32` only.
+`koffi` FFI module. `koffi` is packaged for `win32` only in `build/custom`; the remote control
+branch packages it for macOS (both prebuilts in both halves of the universal app) and Linux too.
 
-### Planned: remote control during screen sharing
+### On test: remote control during screen sharing
 
-Not in the build yet. Letting another participant drive the presenter's mouse, keyboard and
-clipboard - for a shared screen as well as a shared window - is designed in
-[REMOTE-CONTROL.md](REMOTE-CONTROL.md), together with the facts it rests on, the open questions
-for a prototype and the test plan. It depends on the screensharing indicator, which is still an
-unfinished draft.
+Not in `build/custom` yet. On `feat/remote-control` in both forks, built as `build-rc-N`
+test builds (see [Building](#building)), two more changes are being tested:
+
+- **The screensharing indicator** - a yellow 1 px border along the edges of every shared screen,
+  so a share is not forgotten with the Talk window minimized. Chromium draws such a border around
+  a captured window, but not around a screen. Four thin click-through windows per display rather
+  than one screen-sized transparent one: transparency needs a compositor and an alpha visual,
+  without them (some Linux drivers) a screen-sized transparent window turns black. On macOS the
+  strips need `enableLargerThanScreen: true`, or they are pushed into the work area; on Windows
+  `thickFrame: false` and a `setShape` clip, or the caption minimum height makes the top strip
+  30-40 px thick. Start and end of a share are seen by wrapping `getUserMedia`; the live previews
+  of the picker opt out through `getUserMediaWithoutIndicator()`.
+- **Remote control** - another participant drives the presenter's mouse and keyboard and
+  exchanges text through the clipboard, for a shared screen and a shared window, with consent
+  every time. Presenter on Windows, macOS and Linux on X11; controller on any desktop client.
+  Everything is in `src/remote-control/`; spreed carries a small connector without strings
+  (`fromUserId` in `signaling.js`, `attach` in `webrtc/index.js`, a mount point in
+  `ScreenShare.vue`). Design, protocol, status, test builds, debugging and the testing log:
+  [REMOTE-CONTROL.md](REMOTE-CONTROL.md).
+
+When they go into `build/custom` they become rows of the table above, and the last commit of
+the talk-desktop branch (`ci: build the remote control test branch with its spreed branch`) is
+dropped, so that the workflow bundles spreed from `build/custom` again.
 
 ### What change 1 has to keep
 
@@ -185,6 +204,16 @@ git push fork build-4
 
 A full run takes roughly 12 minutes and uploads three artifacts: `windows-x64`
 (msi + exe), `macos-universal` (dmg) and `linux-x64` (flatpak + zip).
+
+Test builds of a feature branch use `build-rc-N` tags on that branch, so they never take a
+number of a release build. `gh run download <run id> --repo vladopol/talk-desktop --dir
+out/build-rc-N` fetches all three artifacts. The workflow takes spreed from `SPREED_REF`;
+a test branch that needs its own spreed branch changes the default there, in a commit that is
+dropped on merging.
+
+While HEAD carries a `build-*` tag, local builds and `npm run dev` need `CHANNEL=stable`
+(as the workflow sets it): the dev channel derives the version from the tag and fails on
+anything but `v<package version>`.
 
 The tag trigger exists because GitHub only registers a `workflow_dispatch` trigger
 once the workflow file is on the repository default branch, which is `main` here.
