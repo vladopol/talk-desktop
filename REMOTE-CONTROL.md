@@ -864,7 +864,8 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-6` | + "Request control" moved to the call's bottom bar | Built in CI on all platforms (run 44758087728), plus a local dmg; tested 2026-11-20 |
 | `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Built in CI on all platforms (run 44789199830); consent window spread wide on Windows |
 | `build-rc-8` | + consent window and banner keep the size requested | Built |
-| `build-rc-9` | + fixes from a code review (see the testing log) | Current; built in CI on all platforms (run 44795538408) |
+| `build-rc-9` | + fixes from a code review (see the testing log) | Built in CI on all platforms (run 44795538408); tested 2026-11-20, everything works |
+| `build-rc-10` | + the button's tooltip in `<body>`, above the presenter's name | Current |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
@@ -985,6 +986,11 @@ an application window (window mode) works on a Windows presenter. Found:
   - a 'destroyed' listener was added on every focus change.
   The spreed commit with the button also carried 156 translation files staged by mistake; they are
   reverted in a follow-up commit and kept as uncommitted changes, as before.
+- **`build-rc-9`, 2026-11-20:** everything works. The button's tooltip was hidden under the
+  presenter's name over the screen share (the bottom bar's stacking context); `build-rc-10`
+  teleports it to `<body>` with `position: fixed`. On macOS, native `title` tooltips of Talk's
+  buttons do not show at all (on Windows they do): that is why the button has its own tooltip.
+  This affects stock Talk Desktop too and is outside this feature.
 - On a Mac, the message asking to allow access disappears at once when starting a screen share.
   Under investigation. Every test build has a new ad-hoc signature, so macOS loses the Screen
   Recording grant just like the Accessibility one; `app:getDesktopCapturerSources` (stock
