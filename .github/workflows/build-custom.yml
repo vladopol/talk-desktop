@@ -31,7 +31,8 @@ env:
   CHANNEL: stable
   SPREED_REPOSITORY: vladopol/spreed
   # On a tag build there are no inputs, so fall back to the integration branch
-  SPREED_REF: ${{ inputs.spreed_ref || 'build/custom' }}
+  # Test branch of remote control: bundle the spreed branch with its connector
+  SPREED_REF: ${{ inputs.spreed_ref || 'feat/remote-control' }}
   # Where the built-in Talk translations come from. Must be the upstream branch the
   # release tag the spreed branch sits on was cut from - translations keep landing
   # there for months after the tag, and nothing in this fork translates Talk itself.
