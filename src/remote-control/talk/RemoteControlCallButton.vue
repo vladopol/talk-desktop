@@ -8,7 +8,7 @@ import type { Peer } from './channel.ts'
 import type { Client } from './client.ts'
 
 import { t } from '@nextcloud/l10n'
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import IconCursorDefaultClick from 'vue-material-design-icons/CursorDefaultClick.vue'
@@ -24,6 +24,8 @@ const props = defineProps<{
 	client: Client
 	peers: Map<string, Peer>
 }>()
+
+const tooltipId = `rc-call-button-tooltip-${useId()}`
 
 const presenter = computed(() => props.client.view.presenter)
 const peer = computed(() => presenter.value ? props.peers.get(presenter.value) : undefined)
@@ -60,17 +62,56 @@ function onClick() {
 </script>
 
 <template>
-	<NcButton
-		v-if="visible"
-		:variant="inSession ? 'primary' : 'tertiary'"
-		:disabled="!inSession && !canRequest"
-		:aria-label="label"
-		:title="label"
-		@click="onClick">
-		<template #icon>
-			<NcLoadingIcon v-if="requesting" :size="20" />
-			<IconCursorDefaultClick v-else-if="inSession" :size="20" />
-			<IconCursorDefaultClickOutline v-else :size="20" />
-		</template>
-	</NcButton>
+	<!-- Its own tooltip: the native one from title did not show up in the call -->
+	<div v-if="visible" class="rc-call-button">
+		<NcButton
+			:variant="inSession ? 'primary' : 'tertiary'"
+			:disabled="!inSession && !canRequest"
+			:aria-label="label"
+			:aria-describedby="tooltipId"
+			@click="onClick">
+			<template #icon>
+				<NcLoadingIcon v-if="requesting" :size="20" />
+				<IconCursorDefaultClick v-else-if="inSession" :size="20" />
+				<IconCursorDefaultClickOutline v-else :size="20" />
+			</template>
+		</NcButton>
+		<span :id="tooltipId" role="tooltip" class="rc-call-button__tooltip">{{ label }}</span>
+	</div>
 </template>
+
+<style scoped>
+.rc-call-button {
+	position: relative;
+	display: inline-flex;
+}
+
+.rc-call-button__tooltip {
+	position: absolute;
+	bottom: calc(100% + var(--default-grid-baseline));
+	inset-inline-start: 50%;
+	transform: translateX(-50%);
+	z-index: 100;
+	width: max-content;
+	max-width: 320px;
+	padding: var(--default-grid-baseline) calc(2 * var(--default-grid-baseline));
+	border-radius: var(--border-radius);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	box-shadow: 0 0 6px var(--color-box-shadow);
+	font-size: var(--font-size-small, 13px);
+	line-height: 1.3;
+	text-align: center;
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.15s, visibility 0.15s;
+}
+
+.rc-call-button:hover .rc-call-button__tooltip,
+.rc-call-button:focus-within .rc-call-button__tooltip {
+	opacity: 1;
+	visibility: visible;
+	transition-delay: 0.4s;
+}
+</style>
