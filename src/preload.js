@@ -142,6 +142,10 @@ const TALK_DESKTOP = {
 		writeClipboard: (text) => ipcRenderer.send('remoteControl:writeClipboard', text),
 		/** @param {{ allow: boolean, clipboard: boolean }} result - The consent window's answer */
 		consentResult: (result) => ipcRenderer.send('remoteControl:consentResult', result),
+		/** @param {number} height - Height of the consent window's content in CSS pixels */
+		resizeConsent: (height) => ipcRenderer.send('remoteControl:consentResize', height),
+		/** @param {number} width - Width of the banner's content in CSS pixels */
+		resizeBanner: (width) => ipcRenderer.send('remoteControl:bannerResize', width),
 		/** @param {'take-back'|'bring-to-front'} action - A banner button */
 		bannerAction: (action) => ipcRenderer.send('remoteControl:bannerAction', action),
 		bannerState: () => ipcRenderer.invoke('remoteControl:bannerState'),

@@ -11,7 +11,7 @@ import { isMac, isWindows } from './system.utils.ts'
 /**
  * Thickness of the indicator border in pixels (DIP).
  */
-const BORDER_WIDTH = 4
+const BORDER_WIDTH = 1
 
 /**
  * Color of the indicator border. The same yellow Chromium draws around a captured window,
