@@ -40,6 +40,8 @@ const unavailableReason = computed(() => {
 			return t('talk_desktop', 'The presenter has not allowed Talk to control their computer yet')
 		case 'disabled':
 			return t('talk_desktop', 'The presenter does not allow control')
+		case 'wayland':
+			return t('talk_desktop', 'The presenter uses Wayland, where control is not supported yet')
 		case 'unsupported':
 		case 'bindings':
 			return t('talk_desktop', 'This screen share cannot be controlled')

@@ -40,11 +40,12 @@ let connection: Connection | null = null
 let ownOs: RcOs | null = null
 
 /**
- * The roles this client announces: controlling works everywhere, giving control only where
- * input can be injected
+ * The roles this client announces: every desktop client can control and give control; whether
+ * the current share can actually be controlled is announced separately in cap
  */
 function getRoles(): ('host' | 'ctl')[] {
-	return ownOs === 'win' || ownOs === 'mac' ? ['host', 'ctl'] : ['ctl']
+	// On Linux the presenter needs X11; on Wayland the capability says why not
+	return ['host', 'ctl']
 }
 
 /**

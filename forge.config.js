@@ -176,11 +176,8 @@ module.exports = {
 		},
 
 		packageAfterCopy(_forgeConfig, buildPath, _electronVersion, platform, arch) {
-			// koffi is loaded on Windows (src/app/nativeWindows.ts, src/remote-control) and on
-			// macOS (src/remote-control/injector.mac.ts), not on Linux.
-			if (platform !== 'win32' && platform !== 'darwin') {
-				return
-			}
+			// koffi is loaded on Windows (src/app/nativeWindows.ts, src/remote-control), macOS
+			// and Linux (src/remote-control/injector.*.ts)
 
 			// koffi (native FFI) is kept out of the webpack bundle (see webpack.main.config.js externals),
 			// so webpack does not copy it into the package. Copy it into the packaged app's node_modules

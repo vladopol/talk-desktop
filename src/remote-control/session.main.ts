@@ -95,6 +95,9 @@ async function getInjector(): Promise<Injector | null> {
 	} else if (isMac) {
 		const { MacInjector } = await import('./injector.mac.ts')
 		injector = new MacInjector()
+	} else if (process.platform === 'linux') {
+		const { LinuxInjector } = await import('./injector.linux.ts')
+		injector = new LinuxInjector()
 	}
 	return injector
 }
@@ -135,9 +138,10 @@ async function getCapability(): Promise<{ src: RcSourceKind | null, ok: boolean,
 	}
 	const availability = native.availability()
 	if (!availability.ok) {
-		return { src, ok: false, why: availability.why }
+		// XTest does not reach native Wayland windows
+		return { src, ok: false, why: OS === 'linux' && availability.why === 'unsupported' ? 'wayland' : availability.why }
 	}
-	if (src === 'desktop' && !isWindows) {
+	if (src === 'desktop' && isMac) {
 		return { src, ok: false, why: 'unsupported' }
 	}
 	return { src, ok: true }
@@ -527,7 +531,8 @@ function mapPoint(current: Session, x: number, y: number, forClick: boolean): Os
 		x: Math.min(rect.x + x * rect.width, rect.x + rect.width - 1),
 		y: Math.min(rect.y + y * rect.height, rect.y + rect.height - 1),
 	}
-	if (isWindows) {
+	// Physical pixels everywhere but on macOS
+	if (!isMac) {
 		point.x = Math.round(point.x)
 		point.y = Math.round(point.y)
 	}

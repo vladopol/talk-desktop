@@ -197,6 +197,7 @@ OC.L10N.register(
     "To take control back, press Ctrl+Alt+Shift+Esc or use the banner at the top of the screen." : "Чтобы забрать управление, нажмите Ctrl+Alt+Shift+Esc или используйте панель вверху экрана.",
     "Use Cmd as Ctrl" : "Cmd работает как Ctrl",
     "Use Ctrl as Cmd" : "Ctrl работает как Cmd",
+    "The presenter uses Wayland, where control is not supported yet" : "У демонстрирующего Wayland, где управление пока не поддерживается",
     "Waiting for the presenter to allow control …" : "Ожидание разрешения от демонстрирующего …",
     "all your screens" : "все ваши экраны",
     "the shared screen" : "демонстрируемый экран",

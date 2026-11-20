@@ -30,6 +30,7 @@ Like everything in [CUSTOM-BUILD.md](CUSTOM-BUILD.md), this is specific to the f
 - [User interface](#user-interface)
 - [Packaging](#packaging)
 - [Existing code the feature builds on](#existing-code-the-feature-builds-on)
+- [Implementation status](#implementation-status)
 - [Open questions for the prototype](#open-questions-for-the-prototype)
 - [Stages and estimate](#stages-and-estimate)
 - [Test plan](#test-plan)
@@ -44,15 +45,15 @@ second video stream, no extra server.
 
 **v1:**
 
-- presenter: Talk Desktop on Windows; macOS as a later stage of the same version;
+- presenter: Talk Desktop on Windows, macOS and Linux on X11;
 - controller: Talk Desktop on any platform;
 - sources: all screens (`entire-desktop`), one screen, one window;
 - input: absolute mouse with all buttons, wheel, physical keys;
 - clipboard: plain text in both directions.
 
 **Not in v1:** the controller in a browser (needs a server-side component, see
-[Packaging](#packaging)), a Linux presenter (X11 via XTest, Wayland via the RemoteDesktop
-portal), HTML, images and files in the clipboard, several controllers taking turns, chat
+[Packaging](#packaging)), a Linux presenter on Wayland (needs the RemoteDesktop portal, with a
+system dialog for every session), HTML, images and files in the clipboard, several controllers taking turns, chat
 messages about granted control, a server-side policy of who may control, a P2P data channel
 for mouse moves, tracking the presenter's local keyboard (low-level hooks), raising an
 occluded window automatically on Windows.
@@ -483,6 +484,28 @@ foreground thread's layout. Pause (E1 1D 45) needs special handling or goes to t
   per-build loss of the grant.
 - Own windows are filtered by `kCGWindowOwnerPID == process.pid`.
 
+### Linux (X11)
+
+`libX11.so.6` and `libXtst.so.6` through koffi (`src/remote-control/injector.linux.ts`); both
+are dependencies of Electron itself, so they are present wherever Talk runs, the flatpak
+runtime included (the flatpak has `--socket=fallback-x11`).
+
+- Coordinates are physical pixels of the root window: `screen.dipToScreenRect()` for a screen,
+  `XDisplayWidth`/`XDisplayHeight` for `entire-desktop`, `XGetGeometry` +
+  `XTranslateCoordinates` for a window (`window:<XID>:0`).
+- `XTestFakeMotionEvent`, `XTestFakeButtonEvent` (buttons 1/2/3, back 8, forward 9; the wheel is
+  buttons 4–7, one press per notch, fractions carried over), `XTestFakeKeyEvent` with the
+  keycode evdev + 8 from the key table. The X server applies the presenter's layout.
+- Hit test: the window manager's `_NET_CLIENT_LIST_STACKING` from the top, skipping
+  `_NET_WM_STATE_HIDDEN` and the indicator strips; own windows by `_NET_WM_PID`; dialogs by the
+  `WM_TRANSIENT_FOR` chain; menus are override-redirect windows outside the client list, so the
+  shared window is the top client under them. Keys: `_NET_ACTIVE_WINDOW`.
+- An X error handler that ignores errors is installed first: a `BadWindow` on a window that has
+  just been closed would otherwise end the process in Xlib's default handler.
+- Password managers: `x-kde-passwordManagerHint` (KeePassXC, Klipper).
+- **Wayland:** XTest only reaches XWayland windows, so a Wayland session reports
+  `cap: { ok: false, why: 'wayland' }` and the controller sees why.
+
 ### Key table
 
 Do not write the `code` → scan code / `kVK` table by hand. Chromium's
@@ -764,6 +787,26 @@ spreed (`.overrides/spreed`, `build/custom` on v25.0.8):
 | `src/utils/webrtc/simplewebrtc/getscreenmedia.js:24` | Desktop capture constraints | No size/fps limits set |
 | `src/components/CallView/shared/ScreenShare.vue:10`, `:42`, `:142`, `:168` | Double-click zoom, `VideoBottomBar`, panzoom | Pause/hide during control |
 | `src/components/CallView/shared/LocalAudioControlButton.vue:330`, `LocalVideoControlButton.vue:238`, `src/components/TopBar/ReactionMenu.vue:43` | Call hotkeys M, Space, V, R | Never let injected or captured keys trigger them |
+
+## Implementation status
+
+On branch `feat/remote-control` of both forks (2026-11-20); not tested in a live call yet.
+
+| Part of the plan | State |
+|---|---|
+| Indicator (change 6) | Restored from the stash, committed first |
+| Protocol, checks, limits, watchdogs, `releaseAll`, revoke triggers, log | Done |
+| Windows injector, window mode (owner chain, focus rule, states, "Bring to front") | Done, untested |
+| macOS injector (CGEvent, CGWindowList, Accessibility) | Done; window list and hit test checked on a Mac, injection not yet |
+| Linux X11 injector | Done, untested; Wayland not supported |
+| Clipboard both ways, attribution, password-manager formats | Done |
+| Consent window, banner, control layer, key capture, Cmd ↔ Ctrl, settings, kill switch, ru strings | Done |
+| koffi in the universal macOS build and on Linux | Done |
+| Presenter **offering** control (screen-share and participant menus) | Not done: only the controller's request, to keep the spreed connector small |
+| "Take back" inside the call window | Not done: the banner and the shortcut cover it |
+| Cmd ↔ Ctrl only in shortcuts with a letter or digit | Simplified: the modifier is mapped as a whole while the toggle is on |
+| Raising an occluded window on macOS and Linux | Not done, left to the pilot as planned |
+| Measurements, the open questions below, pilot | Pending |
 
 ## Open questions for the prototype
 

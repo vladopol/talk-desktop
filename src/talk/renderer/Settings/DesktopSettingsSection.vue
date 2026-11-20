@@ -69,7 +69,7 @@ const notificationLevelOptions = [
 const secondarySpeaker = useAppConfigValue('secondarySpeaker')
 const secondarySpeakerDevice = useAppConfigValue('secondarySpeakerDevice')
 
-const remoteControlAvailable = BUILD_CONFIG.remoteControl !== false && (isWindows || isMac)
+const remoteControlAvailable = BUILD_CONFIG.remoteControl !== false && (isWindows || isMac || (isLinux && !window.systemInfo.isWayland))
 const allowRemoteControl = useAppConfigValue('allowRemoteControl')
 const remoteControlClipboard = useAppConfigValue('remoteControlClipboard')
 const remoteControlDescription = isMac
