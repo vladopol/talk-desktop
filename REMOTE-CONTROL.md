@@ -866,7 +866,7 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-8` | + consent window and banner keep the size requested | Built |
 | `build-rc-9` | + fixes from a code review (see the testing log) | Built in CI on all platforms (run 44795538408); tested 2026-11-20, everything works |
 | `build-rc-10` | + the button's tooltip in `<body>`, above the presenter's name | Superseded by rc-11 |
-| `build-rc-11` | + tooltips of all `title` attributes drawn by the page on macOS; the button uses `title` again | Current |
+| `build-rc-11` | + tooltips of all `title` attributes drawn by the page on macOS; the button uses `title` again | Current; Windows and Linux in CI (run 44803460736), macOS job lost to runner capacity, dmg built locally |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
