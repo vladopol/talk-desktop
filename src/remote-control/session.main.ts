@@ -379,7 +379,6 @@ function updateBanner(clipboardNote: string | null = null) {
 	}
 	showBanner({
 		name: session.name,
-		login: session.userId,
 		windowMode: session.source.kind === 'window',
 		state: session.state,
 		why: session.stateWhy,
