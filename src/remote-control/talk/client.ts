@@ -37,6 +37,9 @@ type Session = {
 	clipboardId: number
 }
 
+/** How long the reason a click was refused stays visible, ms */
+const BLOCKED_HINT_MIN = 3000
+
 const MODIFIER_RE = /^(Control|Alt|Shift|Meta)(Left|Right)$/
 
 /**
@@ -56,6 +59,8 @@ export class Client {
 	/** Whether the layer has the keyboard focus: only then keys go to the presenter */
 	private focused = false
 	private wasConnected = true
+	private blockedAt = 0
+	private blockedTimer: number | null = null
 	private heldModifiers = new Set<string>()
 	/** Whether the local user is being controlled: then they cannot control anyone */
 	private beingControlled = false
@@ -460,8 +465,7 @@ export class Client {
 				}
 				return
 			case 'state':
-				current.status = message.s
-				current.why = message.why ?? null
+				this.applyState(current, message.s, message.why ?? null)
 				return
 			case 'revoke':
 				this.end(message.why)
@@ -507,6 +511,37 @@ export class Client {
 				state.clipboardIn = null
 			}
 		}, 4000)
+	}
+
+	/**
+	 * A refused click is reported as blocked and the next accepted one as active again,
+	 * often a fraction of a second later. Keep the reason visible long enough to be read.
+	 *
+	 * @param state - The state of the presenter's screen
+	 * @param status - The new status
+	 * @param why - Why
+	 */
+	private applyState(state: ControlState, status: ControlState['status'], why: ControlState['why']) {
+		if (this.blockedTimer !== null) {
+			window.clearTimeout(this.blockedTimer)
+			this.blockedTimer = null
+		}
+		const shownFor = performance.now() - this.blockedAt
+		if (status === 'active' && state.status === 'blocked' && shownFor < BLOCKED_HINT_MIN) {
+			this.blockedTimer = window.setTimeout(() => {
+				this.blockedTimer = null
+				if (state.status === 'blocked') {
+					state.status = 'active'
+					state.why = null
+				}
+			}, BLOCKED_HINT_MIN - shownFor)
+			return
+		}
+		if (status === 'blocked') {
+			this.blockedAt = performance.now()
+		}
+		state.status = status
+		state.why = why
 	}
 
 	/**
