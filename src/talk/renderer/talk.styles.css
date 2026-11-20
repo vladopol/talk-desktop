@@ -26,3 +26,28 @@
 a[href="#"] .button-vue__wrapper {
 	pointer-events: none;
 }
+
+/* Tooltips of title attributes on macOS, see titleTooltips.ts */
+.title-tooltip {
+	position: fixed;
+	z-index: 100000;
+	max-width: min(360px, calc(100vw - 16px));
+	padding: 4px 8px;
+	border-radius: var(--border-radius, 6px);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	box-shadow: 0 0 6px var(--color-box-shadow);
+	font-size: var(--font-size-small, 13px);
+	line-height: 1.3;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+	visibility: hidden;
+	opacity: 0;
+	transition: opacity 0.1s;
+}
+
+.title-tooltip--visible {
+	visibility: visible;
+	opacity: 1;
+}
