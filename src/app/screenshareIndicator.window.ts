@@ -97,6 +97,10 @@ function createIndicatorWindow(bounds: Rectangle): BrowserWindow {
 		resizable: false,
 		show: false,
 		skipTaskbar: true,
+		// Without the thick frame Windows also drops the caption style, which otherwise
+		// imposes a minimum window height of a caption bar (some 30-40 px): the top strip
+		// grew that much into the screen, the bottom one past its edge
+		thickFrame: false,
 		// A floating window type that takes no focus and does not show up in the task switcher
 		type: isWindows ? 'toolbar' : isMac ? 'panel' : 'normal',
 		webPreferences: {
@@ -107,6 +111,10 @@ function createIndicatorWindow(bounds: Rectangle): BrowserWindow {
 	})
 
 	window.removeMenu()
+	// Should the OS still enforce a minimum size, only the requested strip is painted
+	if (!isMac) {
+		window.setShape([{ x: 0, y: 0, width: bounds.width, height: bounds.height }])
+	}
 	// The border is decoration only - every click has to reach whatever is below it
 	window.setIgnoreMouseEvents(true)
 	// 'screen-saver' is the level that also floats above full-screen applications
