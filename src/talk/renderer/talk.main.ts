@@ -4,6 +4,7 @@
  */
 
 import { setupWebPage } from '../../shared/setupWebPage.js'
+import { setupScreenshareIndicator } from './screensharing/screenshareIndicator.ts'
 import { createTalkDesktopApp } from './TalkDesktop.app.ts'
 
 import '../../shared/assets/styles.css'
@@ -11,6 +12,9 @@ import '@nextcloud/talk/src/icons.css'
 import './talk.styles.css'
 
 await setupWebPage()
+
+// Mark the shared screen with a border while a screen is being shared
+setupScreenshareIndicator()
 
 await createTalkDesktopApp()
 

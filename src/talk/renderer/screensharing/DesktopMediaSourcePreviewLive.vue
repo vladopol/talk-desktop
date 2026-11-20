@@ -8,6 +8,7 @@ import type { ScreensharingSourceId } from './screensharing.types.ts'
 
 import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { getUserMediaWithoutIndicator } from './screenshareIndicator.ts'
 
 const props = defineProps<{
 	mediaSourceId: ScreensharingSourceId
@@ -59,7 +60,7 @@ function getStreamForMediaSource(mediaSourceId: ScreensharingSourceId) {
 			}
 
 	// @ts-expect-error Each browser has a different API, the current object is compatible with Chromium
-	return navigator.mediaDevices.getUserMedia(constraints)
+	return getUserMediaWithoutIndicator(constraints)
 }
 
 /**

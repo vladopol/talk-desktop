@@ -19,6 +19,7 @@ const { setupReleaseNotificationScheduler, checkForUpdate } = require('./app/git
 const { setupLaunchAtStartup } = require('./app/launchAtStartup.config.ts')
 const { runMigrations } = require('./app/migration.service.ts')
 const { listNativeWindows, restoreNativeWindow } = require('./app/nativeWindows.ts')
+const { setScreenshareIndicator } = require('./app/screenshareIndicator.window.ts')
 const { systemInfo, isMac, isWindows, isSameExecution, isSquirrel, relaunchApp } = require('./app/system.utils.ts')
 const { applyTheme } = require('./app/theme.config.ts')
 const { buildTitle, onReadyToShow } = require('./app/utils.ts')
@@ -84,6 +85,11 @@ ipcMain.on('app:grantUserGesturedPermission', (event, id) => {
 	return event.sender.executeJavaScript(`document.getElementById('${id}')?.click()`, true)
 })
 ipcMain.on('app:toggleDevTools', (event) => event.sender.toggleDevTools())
+ipcMain.on('app:setScreenshareIndicator', (event, sourceId) => {
+	// Paint a border along the edges of the screen being shared, so an ongoing screen share
+	// stays visible while the Talk window is minimized. null hides it again.
+	setScreenshareIndicator(sourceId, event.sender)
+})
 ipcMain.handle('app:anything', () => { /* Put any code here to run it from UI */ })
 ipcMain.on('app:openChromeWebRtcInternals', () => openChromeWebRtcInternals())
 ipcMain.handle('app:update:check', async () => await checkForUpdate({ forceRequest: true }))

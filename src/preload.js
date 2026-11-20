@@ -107,6 +107,14 @@ const TALK_DESKTOP = {
 	 */
 	activateWindowForCapture: (source) => ipcRenderer.invoke('app:activateWindowForCapture', source),
 	/**
+	 * Show or hide the screensharing indicator - a border along the edges of the shared screen,
+	 * so an ongoing screen share remains visible while the Talk window is minimized.
+	 * Screens only: Chromium draws its own border around a captured window.
+	 *
+	 * @param {string|null} sourceId - The screensharing sourceId being captured, or null when sharing stopped
+	 */
+	setScreenshareIndicator: (sourceId) => ipcRenderer.send('app:setScreenshareIndicator', sourceId),
+	/**
 	 * Relaunch an entire application
 	 */
 	relaunch: () => ipcRenderer.send('app:relaunch'),
