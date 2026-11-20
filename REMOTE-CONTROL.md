@@ -830,6 +830,8 @@ Windows presenter and a macOS controller on 2026-11-20, see [Testing log](#testi
 | Linux X11 injector | Done, untested; Wayland not supported |
 | Clipboard both ways, attribution, password-manager formats | Done |
 | Consent window, banner, control layer, key capture, Cmd ↔ Ctrl, settings, kill switch, ru strings | Done; consent window and banner reworked after the first test (`build-rc-3`) |
+| "Request control" in the call's bottom bar | Done (`build-rc-6`), not yet seen in a live call |
+| Clients getting to know each other (`hello`/`cap`) whatever the order of joining | Fixed in `build-rc-5`, to be confirmed |
 | koffi in the universal macOS build and on Linux | Done |
 | Presenter **offering** control (screen-share and participant menus) | Not done: only the controller's request, to keep the spreed connector small |
 | "Take back" inside the call window | Not done: the banner and the shortcut cover it |
@@ -859,7 +861,22 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-3` | + consent window and banner reworked, 1 px border | Cancelled in favour of rc-4 |
 | `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Built (macOS job lost to GitHub runner capacity; dmg built locally) |
 | `build-rc-5` | + every first `hello` answered, early `cap` kept, layer waits for the module | Cancelled in favour of rc-6 |
-| `build-rc-6` | + "Request control" moved to the call's bottom bar | Current |
+| `build-rc-6` | + "Request control" moved to the call's bottom bar | Current; macOS dmg built locally, CI run waiting for runners |
+
+GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
+cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
+`build-rc-6` waited as a whole. Nothing is wrong with the code then; `gh run rerun <id> --failed`
+retries only that job. Meanwhile the dmg is built locally from the same commit and kept apart from
+the CI artifacts:
+
+```sh
+CHANNEL=stable npm run build:mac && CHANNEL=stable npm run package:mac
+mkdir -p out/build-rc-N/macos-universal-local
+cp out/make/dmg/universal/Nextcloud.Talk-macos-universal.dmg out/build-rc-N/macos-universal-local/
+```
+
+The local spreed clone has to be on `feat/remote-control` for that (the log line
+`Packaged with built-in Nextcloud Talk v… on path:` ends in `.overrides/spreed`).
 
 Locally (macOS) the dmg and the Linux zip build as in [CUSTOM-BUILD.md](CUSTOM-BUILD.md#locally),
 with `CHANNEL=stable`: while HEAD carries a `build-*` tag, the dev channel fails in
@@ -968,6 +985,16 @@ below and the rest of the [test plan](#test-plan).
 19–26 working days plus the pilot. Stage 5 can wait, since there is one Mac in the fleet.
 
 ## Test plan
+
+Getting to know each other (the race of `build-rc-4`):
+
+- The presenter joins first, the controller later; the other way round; both rejoin; the
+  presenter starts sharing before and after the controller joins; the signaling reconnects.
+  Every time the button appears in the controller's bottom bar within a few seconds of the share
+  being shown big, and the console of both sides has `[remote-control] hello from …` and, on the
+  controller, `[remote-control] cap from …`.
+- A client of an older build (no module, or `build-rc-1…4`) in the same call: no button against
+  it, no errors.
 
 Screen:
 
