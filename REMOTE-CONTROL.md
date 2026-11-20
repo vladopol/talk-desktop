@@ -862,7 +862,8 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Built (macOS job lost to GitHub runner capacity; dmg built locally) |
 | `build-rc-5` | + every first `hello` answered, early `cap` kept, layer waits for the module | Cancelled in favour of rc-6 |
 | `build-rc-6` | + "Request control" moved to the call's bottom bar | Built in CI on all platforms (run 44758087728), plus a local dmg; tested 2026-11-20 |
-| `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Current; built in CI on all platforms (run 44789199830) |
+| `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Built in CI on all platforms (run 44789199830); consent window spread wide on Windows |
+| `build-rc-8` | + consent window and banner keep the size requested | Current |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
@@ -963,6 +964,11 @@ an application window (window mode) works on a Windows presenter. Found:
 - The button belongs next to the screen share button, not after the reactions: the mount point now
   follows `TopBarMediaControls`, whose last button is the screen share.
 - The button showed no tooltip. It now has its own, shown on hover and focus, and `aria-describedby`.
+- With `build-rc-7` the consent window spread wide on Windows. The resize now read the size back
+  from the window (`getBounds`), and on Windows with a display scale other than 100 % a frameless
+  window reports a pixel or so more than set: every round made it wider, the text reflowed and
+  asked for the next round. Fixed in `build-rc-8`: the requested size is kept per window
+  (`windowSizes`) and never read back.
 - On a Mac, the message asking to allow access disappears at once when starting a screen share.
   Under investigation. Every test build has a new ad-hoc signature, so macOS loses the Screen
   Recording grant just like the Accessibility one; `app:getDesktopCapturerSources` (stock
