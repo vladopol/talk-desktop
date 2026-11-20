@@ -37,6 +37,14 @@ client ships it, drop change 4 rather than porting it.
 Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
 `koffi` FFI module, which is packaged for `win32` only.
 
+### Planned: remote control during screen sharing
+
+Not in the build yet. Letting another participant drive the presenter's mouse, keyboard and
+clipboard - for a shared screen as well as a shared window - is designed in
+[REMOTE-CONTROL.md](REMOTE-CONTROL.md), together with the facts it rests on, the open questions
+for a prototype and the test plan. It depends on the screensharing indicator, which is still an
+unfinished draft.
+
 ### What change 1 has to keep
 
 Change 1 is the largest patch here and the only one that rearranges the app's layout, so
