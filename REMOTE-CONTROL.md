@@ -825,13 +825,13 @@ Windows presenter and a macOS controller on 2026-11-20, see [Testing log](#testi
 |---|---|
 | Indicator (change 6) | Restored from the stash, committed first |
 | Protocol, checks, limits, watchdogs, `releaseAll`, revoke triggers, log | Done |
-| Windows injector, window mode (owner chain, focus rule, states, "Bring to front") | Done, untested |
+| Windows injector, window mode (owner chain, focus rule, states, "Bring to front") | Done; window mode works on Windows (`build-rc-6`) |
 | macOS injector (CGEvent, CGWindowList, Accessibility) | Done; window list and hit test checked on a Mac, injection not yet |
 | Linux X11 injector | Done, untested; Wayland not supported |
 | Clipboard both ways, attribution, password-manager formats | Done |
 | Consent window, banner, control layer, key capture, Cmd ↔ Ctrl, settings, kill switch, ru strings | Done; consent window and banner reworked after the first test (`build-rc-3`) |
-| "Request control" in the call's bottom bar | Done (`build-rc-6`), not yet seen in a live call |
-| Clients getting to know each other (`hello`/`cap`) whatever the order of joining | Fixed in `build-rc-5`, to be confirmed |
+| "Request control" in the call's bottom bar | Done (`build-rc-6`), works; moved next to the screen share button with its own tooltip in `build-rc-7` |
+| Clients getting to know each other (`hello`/`cap`) whatever the order of joining | Fixed in `build-rc-5`, confirmed with `build-rc-6` |
 | koffi in the universal macOS build and on Linux | Done |
 | Presenter **offering** control (screen-share and participant menus) | Not done: only the controller's request, to keep the spreed connector small |
 | "Take back" inside the call window | Not done: the banner and the shortcut cover it |
@@ -861,7 +861,8 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-3` | + consent window and banner reworked, 1 px border | Cancelled in favour of rc-4 |
 | `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Built (macOS job lost to GitHub runner capacity; dmg built locally) |
 | `build-rc-5` | + every first `hello` answered, early `cap` kept, layer waits for the module | Cancelled in favour of rc-6 |
-| `build-rc-6` | + "Request control" moved to the call's bottom bar | Current; built in CI on all platforms (run 44758087728), plus a local dmg |
+| `build-rc-6` | + "Request control" moved to the call's bottom bar | Built in CI on all platforms (run 44758087728), plus a local dmg; tested 2026-11-20 |
+| `build-rc-7` | + banner no longer grows, name without login; button next to screen share, own tooltip | Current (run 44789199830) |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
@@ -950,8 +951,25 @@ attach instead of giving up when the screen share was shown first. `hello` and `
 the console (`[remote-control] hello from …`). On request, `build-rc-6` moves the button into the
 call's bottom bar.
 
-Not tested yet: input actually reaching the presenter's desktop, the keyboard and layouts,
-the clipboard, window mode, macOS and Linux presenters, latency over the VPN, the open questions
+**2026-11-20, `build-rc-6`.** The button appears in the bottom bar and the session starts; control of
+an application window (window mode) works on a Windows presenter. Found:
+- The banner grew downwards without end. It measured its root element, which follows the window
+  size, so every resize asked for the next one; on Windows `setContentSize` of a frameless window
+  also added a frame it does not have. Fixed in `build-rc-7`: the banner measures its content, and
+  the main process changes only the width with `setBounds`, keeping the height it was created with
+  (the consent window also resizes with `setBounds` now).
+- The banner showed "Name (login)"; on request it shows only the display name, like the rest of
+  Talk. The consent window keeps the login against display-name spoofing.
+- The button belongs next to the screen share button, not after the reactions: the mount point now
+  follows `TopBarMediaControls`, whose last button is the screen share.
+- The button showed no tooltip. It now has its own, shown on hover and focus, and `aria-describedby`.
+- On a Mac, the message asking to allow access disappears at once when starting a screen share.
+  Under investigation. Every test build has a new ad-hoc signature, so macOS loses the Screen
+  Recording grant just like the Accessibility one; `app:getDesktopCapturerSources` (stock
+  behaviour) then opens System Settings and closes the source dialog.
+
+Not tested yet: input into the presenter's whole desktop, the keyboard and layouts,
+the clipboard, macOS and Linux presenters, latency over the VPN, the open questions
 below and the rest of the [test plan](#test-plan).
 
 ## Open questions for the prototype
