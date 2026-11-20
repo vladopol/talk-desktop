@@ -214,9 +214,38 @@ function mountScreen(options: MountScreenOptions): () => void {
 }
 
 /**
+ * Mount the "Request control" button into the call's bottom bar. It shows up while a screen
+ * share of a participant who can give control is shown big.
+ *
+ * @param element - The mount point in the bottom bar
+ * @return Unmount
+ */
+function mountCallButton(element: HTMLElement): () => void {
+	let app: ReturnType<typeof createApp> | null = null
+	let disposed = false
+
+	Promise.all([import('./RemoteControlCallButton.vue'), connectionReady.promise]).then(([{ default: RemoteControlCallButton }]) => {
+		if (disposed || !connection) {
+			return
+		}
+		app = createApp(RemoteControlCallButton, {
+			client: connection.client,
+			peers: connection.peers,
+		})
+		app.mount(element)
+	})
+
+	return () => {
+		disposed = true
+		app?.unmount()
+	}
+}
+
+/**
  * The API exposed to Talk as OCA.Talk.Desktop.remoteControl
  */
 export const remoteControl = {
 	attach,
 	mountScreen,
+	mountCallButton,
 }

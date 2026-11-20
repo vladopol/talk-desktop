@@ -48,6 +48,8 @@ const MODIFIER_RE = /^(Control|Alt|Shift|Meta)(Left|Right)$/
 export class Client {
 	/** Per presenter session id */
 	readonly states = reactive(new Map<string, ControlState>())
+	/** The presenter whose screen share is shown big with the control layer, for the call bar button */
+	readonly view = reactive({ presenter: null as string | null })
 	private session: Session | null = null
 	private requestTimer: number | null = null
 	private heartbeatTimer: number | null = null
@@ -55,7 +57,6 @@ export class Client {
 	private pendingMove: { x: number, y: number } | null = null
 	private pendingWheel = { dx: 0, dy: 0, x: 0, y: 0 }
 	/** The presenter whose screen the layer currently shows, with the layer attached */
-	private attached: string | null = null
 	/** Whether the layer has the keyboard focus: only then keys go to the presenter */
 	private focused = false
 	private wasConnected = true
@@ -159,13 +160,13 @@ export class Client {
 	 * @param presenter - Signaling session id of the presenter, or null
 	 */
 	attach(presenter: string | null) {
-		if (this.attached === presenter) {
+		if (this.view.presenter === presenter) {
 			return
 		}
-		if (this.attached && this.session?.presenter === this.attached) {
+		if (this.view.presenter && this.session?.presenter === this.view.presenter) {
 			this.release()
 		}
-		this.attached = presenter
+		this.view.presenter = presenter
 		this.focused = false
 		this.updateCapture()
 	}
@@ -300,7 +301,7 @@ export class Client {
 	 */
 	private activeSession(evenIfPaused = false) {
 		const session = this.session
-		if (!session || this.attached !== session.presenter || !this.channel.connected) {
+		if (!session || this.view.presenter !== session.presenter || !this.channel.connected) {
 			return null
 		}
 		const status = this.state(session.presenter).status
@@ -359,7 +360,7 @@ export class Client {
 
 	private updateCapture() {
 		const session = this.session
-		if (!session || this.attached !== session.presenter || !this.focused) {
+		if (!session || this.view.presenter !== session.presenter || !this.focused) {
 			window.TALK_DESKTOP.remoteControl.capture(null)
 			return
 		}

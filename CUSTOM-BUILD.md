@@ -56,8 +56,8 @@ test builds (see [Building](#building)), two more changes are being tested:
   exchanges text through the clipboard, for a shared screen and a shared window, with consent
   every time. Presenter on Windows, macOS and Linux on X11; controller on any desktop client.
   Everything is in `src/remote-control/`; spreed carries a small connector without strings
-  (`fromUserId` in `signaling.js`, `attach` in `webrtc/index.js`, a mount point in
-  `ScreenShare.vue`). Design, protocol, status, test builds, debugging and the testing log:
+  (`fromUserId` in `signaling.js`, `attach` in `webrtc/index.js`, mount points in
+  `ScreenShare.vue` and in the call's `BottomBar.vue`). Design, protocol, status, test builds, debugging and the testing log:
   [REMOTE-CONTROL.md](REMOTE-CONTROL.md).
 
 When they go into `build/custom` they become rows of the table above, and the last commit of
