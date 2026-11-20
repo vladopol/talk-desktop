@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import type { Rectangle } from 'electron'
 import type * as Koffi from 'koffi'
 import type { ControlledSource, HitResult, Injector, KeyTargetResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
@@ -133,6 +134,19 @@ function getBindings(): Bindings | null {
 /**
  * Injects input with XTest
  */
+
+/**
+ * A rectangle in Electron's DIP as X11 physical pixels. screen.dipToScreenRect is Windows only;
+ * dipToScreenPoint works on Linux, and X11 scales uniformly, so the size follows the corners.
+ *
+ * @param rect - The rectangle in DIP
+ */
+function toPhysicalRect(rect: Rectangle): OsRect {
+	const topLeft = screen.dipToScreenPoint({ x: rect.x, y: rect.y })
+	const bottomRight = screen.dipToScreenPoint({ x: rect.x + rect.width, y: rect.y + rect.height })
+	return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y }
+}
+
 export class LinuxInjector implements Injector {
 	readonly os = 'linux' as const
 
@@ -161,7 +175,7 @@ export class LinuxInjector implements Injector {
 			case 'screen': {
 				const display = screen.getAllDisplays().find((display) => String(display.id) === source.displayId)
 				// Electron works in DIP, X11 in physical pixels
-				return display ? { ...screen.dipToScreenRect(null, display.bounds) } : null
+				return display ? toPhysicalRect(display.bounds) : null
 			}
 			case 'window':
 				return source.windowId ? this.windowRect(native, source.windowId) : null
@@ -170,7 +184,7 @@ export class LinuxInjector implements Injector {
 	}
 
 	isOnScreen(point: OsPoint) {
-		return screen.getAllDisplays().some((display) => contains(screen.dipToScreenRect(null, display.bounds), point))
+		return screen.getAllDisplays().some((display) => contains(toPhysicalRect(display.bounds), point))
 	}
 
 	hitTest(point: OsPoint, source: ControlledSource): HitResult {

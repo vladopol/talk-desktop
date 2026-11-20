@@ -35,6 +35,8 @@ type Session = {
 	lastFromPresenter: number
 	incoming: { cid: number, parts: string[], received: number, timer: number } | null
 	clipboardId: number
+	/** What the layer showed before the heartbeats were lost: the presenter does not repeat it */
+	beforeLost: Pick<ControlState, 'status' | 'why'> | null
 }
 
 /** How long the reason a click was refused stays visible, ms */
@@ -49,7 +51,14 @@ export class Client {
 	/** Per presenter session id */
 	readonly states = reactive(new Map<string, ControlState>())
 	/** The presenter whose screen share is shown big with the control layer, for the call bar button */
-	readonly view = reactive({ presenter: null as string | null })
+	readonly view = reactive({
+		presenter: null as string | null,
+		// Whether this client is in a session either way, controlling or controlled. Reactive, so
+		// that the request button follows it; the connection state is not, but a reconnect
+		// brings new hellos, which update the peers
+		busy: false,
+	})
+
 	private session: Session | null = null
 	private requestTimer: number | null = null
 	private heartbeatTimer: number | null = null
@@ -77,6 +86,7 @@ export class Client {
 		this.unsubscribe.push(window.TALK_DESKTOP.remoteControl.on('capturedPaste', (text: string) => this.sendClipboard(text)))
 		this.unsubscribe.push(window.TALK_DESKTOP.remoteControl.on('hostSession', (hostSession: unknown) => {
 			this.beingControlled = !!hostSession
+			this.updateBusy()
 			if (this.beingControlled) {
 				this.stop('user')
 			}
@@ -112,7 +122,11 @@ export class Client {
 	 */
 	canRequest(presenter: string) {
 		const peer = this.peers.get(presenter)
-		return !!peer?.roles.includes('host') && !!peer.cap?.ok && !this.session && !this.beingControlled && this.channel.connected
+		return !!peer?.roles.includes('host') && !!peer.cap?.ok && !this.view.busy && this.channel.connected
+	}
+
+	private updateBusy() {
+		this.view.busy = !!this.session || this.beingControlled
 	}
 
 	/**
@@ -371,7 +385,8 @@ export class Client {
 	private start(presenter: string, message: Extract<RcMessage, { op: 'accept' }>) {
 		const state = this.state(presenter)
 		this.clearRequestTimer()
-		this.session = { presenter, sid: message.sid, lastFromPresenter: performance.now(), incoming: null, clipboardId: 0 }
+		this.session = { presenter, sid: message.sid, lastFromPresenter: performance.now(), incoming: null, clipboardId: 0, beforeLost: null }
+		this.updateBusy()
 		Object.assign(state, { status: 'active', why: null, src: message.src, os: message.os, clipboard: message.clip, clipboardIn: null })
 		this.wasConnected = this.channel.connected
 		this.heartbeatTimer = window.setInterval(() => this.heartbeat(), LIMITS.HEARTBEAT_INTERVAL)
@@ -381,6 +396,7 @@ export class Client {
 	private end(why: ControlState['why']) {
 		const session = this.session
 		this.session = null
+		this.updateBusy()
 		this.clearRequestTimer()
 		if (this.heartbeatTimer !== null) {
 			window.clearInterval(this.heartbeatTimer)
@@ -424,15 +440,26 @@ export class Client {
 		const state = this.state(session.presenter)
 		const lost = performance.now() - session.lastFromPresenter > LIMITS.HEARTBEAT_PAUSE
 		if (lost && state.status !== 'lost') {
+			session.beforeLost = { status: state.status, why: state.why }
 			state.status = 'lost'
 			state.why = 'hb-lost'
 		} else if (!lost && state.status === 'lost') {
-			state.status = 'active'
-			state.why = null
+			this.restoreFromLost(session, state)
 		}
 		if (performance.now() - session.lastFromPresenter > LIMITS.HEARTBEAT_REVOKE) {
 			this.end('hb-lost')
 		}
+	}
+
+	/**
+	 * The heartbeats are back: show the state from before, paused or blocked included
+	 *
+	 * @param session - The session
+	 * @param state - Its state, now 'lost'
+	 */
+	private restoreFromLost(session: Session, state: ControlState) {
+		Object.assign(state, session.beforeLost ?? { status: 'active', why: null })
+		session.beforeLost = null
 	}
 
 	private handle(from: string, message: RcMessage) {
@@ -461,8 +488,7 @@ export class Client {
 		switch (message.op) {
 			case 'hb':
 				if (current.status === 'lost') {
-					current.status = 'active'
-					current.why = null
+					this.restoreFromLost(session, current)
 				}
 				return
 			case 'state':

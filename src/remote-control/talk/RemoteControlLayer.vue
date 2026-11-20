@@ -107,6 +107,8 @@ function toFrame(event: MouseEvent): { x: number, y: number, inside: boolean } |
 
 /** Buttons held on the surface, to clamp drags leaving the frame */
 const heldButtons = new Set<number>()
+// Where the last button-up of a lost capture goes: the point the cursor was last sent to
+let lastPoint = { x: 0, y: 0 }
 
 /**
  * @param event - mousemove
@@ -114,6 +116,7 @@ const heldButtons = new Set<number>()
 function onMouseMove(event: MouseEvent) {
 	const point = toFrame(event)
 	if (point && (point.inside || heldButtons.size > 0)) {
+		lastPoint = { x: point.x, y: point.y }
 		props.client.move(point.x, point.y)
 	}
 }
@@ -138,6 +141,7 @@ function onMouseDown(event: MouseEvent) {
 		return
 	}
 	heldButtons.add(event.button)
+	lastPoint = { x: point.x, y: point.y }
 	props.client.button(event.button, true, point.x, point.y, event.detail)
 }
 
@@ -171,7 +175,22 @@ function onWheel(event: WheelEvent) {
 }
 
 /**
- * Release everything when the surface loses the pointer or the focus
+ * The capture is also lost after every normal mouseup. Only a capture lost with a button still
+ * held (the window lost the pointer mid-drag) releases those buttons, and only them: held keys
+ * stay, so Ctrl+click works more than once. Checked after the task, when a mouseup in flight has
+ * already been handled.
+ */
+function onLostPointerCapture() {
+	setTimeout(() => {
+		for (const button of heldButtons) {
+			props.client.button(button, false, lastPoint.x, lastPoint.y, 0)
+		}
+		heldButtons.clear()
+	})
+}
+
+/**
+ * Release everything when the surface loses the focus
  */
 function release() {
 	heldButtons.clear()
@@ -237,7 +256,7 @@ function setFocused(value: boolean) {
 			@dblclick="swallow"
 			@contextmenu="swallow"
 			@wheel="onWheel"
-			@lostpointercapture="release"
+			@lostpointercapture="onLostPointerCapture"
 			@focus="setFocused(true)"
 			@blur="setFocused(false)" />
 

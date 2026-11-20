@@ -228,7 +228,13 @@ export class MacInjector implements Injector {
 			// they are in the frame, which they are not
 			return 'window-occluded'
 		}
-		return shared ? 'window-occluded' : 'outside'
+		// No window under the point: the desktop picture and its icons, which the window list
+		// leaves out (kCGWindowListExcludeDesktopElements). Fine for a screen share; a point
+		// outside every screen never gets here (isOnScreen).
+		if (shared) {
+			return 'window-occluded'
+		}
+		return this.isOnScreen(point) ? 'ok' : 'outside'
 	}
 
 	keyTarget(source: ControlledSource): KeyTargetResult {
