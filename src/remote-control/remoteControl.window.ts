@@ -44,7 +44,13 @@ export type BannerState = {
 let consentWindow: BrowserWindow | null = null
 let bannerWindow: BrowserWindow | null = null
 let bannerState: BannerState | null = null
-let bannerHeight = 0
+/*
+ * The size of each window as requested, in DIP. It is never read back from the window: on Windows
+ * with a display scale other than 100 % a frameless window comes back a pixel or so larger, and
+ * a resize computed from that grows the window with every round (the consent window spread wide,
+ * the banner grew down).
+ */
+const windowSizes = new WeakMap<BrowserWindow, { width: number, height: number }>()
 let bannerActionHandler: ((action: BannerAction) => void) | null = null
 
 /**
@@ -82,6 +88,7 @@ function createWindow(mode: 'consent' | 'banner', size: { width: number, height:
 			zoomFactor: getAppConfig('zoomFactor'),
 		},
 	})
+	windowSizes.set(window, { width, height })
 	window.removeMenu()
 	// Above full-screen applications, like the screensharing indicator
 	window.setAlwaysOnTop(true, 'screen-saver')
@@ -99,7 +106,7 @@ function createWindow(mode: 'consent' | 'banner', size: { width: number, height:
  */
 function placeOnCursorDisplay(window: BrowserWindow, top: boolean) {
 	const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-	const [width, height] = window.getSize() as [number, number]
+	const { width, height } = windowSizes.get(window)!
 	const bounds: Rectangle = {
 		x: Math.round(workArea.x + (workArea.width - width) / 2),
 		y: top ? workArea.y + 8 : Math.round(workArea.y + (workArea.height - height) / 2),
@@ -200,7 +207,6 @@ export function showBanner(state: BannerState, onAction: (action: BannerAction) 
 	const window = createWindow('banner', { width: 520, height: 44 }, {})
 	bannerWindow = window
 	placeOnCursorDisplay(window, true)
-	bannerHeight = window.getBounds().height
 	window.webContents.once('did-finish-load', () => {
 		if (bannerState) {
 			window.webContents.send('remoteControl:banner', bannerState)
@@ -247,12 +253,12 @@ ipcMain.on('remoteControl:consentResize', (event, height: number) => {
 	if (!window || window.isDestroyed() || event.sender !== window.webContents || !Number.isFinite(height)) {
 		return
 	}
+	const size = windowSizes.get(window)!
 	const newHeight = Math.min(Math.max(Math.ceil(height * window.webContents.getZoomFactor()), 120), 640)
-	if (newHeight === window.getBounds().height) {
+	if (newHeight === size.height) {
 		return
 	}
-	// setBounds, not setContentSize: see remoteControl:bannerResize
-	window.setBounds({ ...window.getBounds(), height: newHeight })
+	size.height = newHeight
 	placeOnCursorDisplay(window, false)
 })
 
@@ -261,20 +267,16 @@ ipcMain.on('remoteControl:bannerResize', (event, width: number) => {
 	if (!window || window.isDestroyed() || !isBanner(event.sender) || !Number.isFinite(width)) {
 		return
 	}
-	const bounds = window.getBounds()
+	const size = windowSizes.get(window)!
 	const newWidth = Math.min(Math.max(Math.ceil(width * window.webContents.getZoomFactor()), 320), 960)
-	if (newWidth === bounds.width) {
+	if (newWidth === size.width) {
 		return
 	}
-	// Only the width changes: setContentSize on a frameless window on Windows adds the size of
-	// a frame it does not have, and the window grew with every resize. Keep it centered where it
-	// is, the presenter may have dragged it aside.
-	window.setBounds({
-		x: Math.round(bounds.x + (bounds.width - newWidth) / 2),
-		y: bounds.y,
-		width: newWidth,
-		height: bannerHeight,
-	})
+	// Only the width changes. Keep it centered where it is, the presenter may have dragged it aside.
+	const { x, y } = window.getBounds()
+	const center = x + size.width / 2
+	size.width = newWidth
+	window.setBounds({ x: Math.round(center - newWidth / 2), y, width: newWidth, height: size.height })
 })
 
 ipcMain.handle('remoteControl:bannerState', (event) => isBanner(event.sender) ? bannerState : null)
