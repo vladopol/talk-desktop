@@ -31,6 +31,8 @@ Like everything in [CUSTOM-BUILD.md](CUSTOM-BUILD.md), this is specific to the f
 - [Packaging](#packaging)
 - [Existing code the feature builds on](#existing-code-the-feature-builds-on)
 - [Implementation status](#implementation-status)
+- [Test builds and debugging](#test-builds-and-debugging)
+- [Testing log](#testing-log)
 - [Open questions for the prototype](#open-questions-for-the-prototype)
 - [Stages and estimate](#stages-and-estimate)
 - [Test plan](#test-plan)
@@ -699,16 +701,29 @@ globally by a Talk Desktop setting.
 
 **Presenter:**
 
-- "Give control…" in the screen-share menu and the participant menu. The list only shows
-  Nextcloud users in the call who sent `hello` with the `ctl` role. Choosing one opens main's
-  confirmation window.
-- An incoming request opens main's window "Ivanov (ivanov) asks to control your screen [Allow]
-  [Decline]", auto-declined after 30 s.
+- *Planned, not in the prototype:* "Give control…" in the screen-share menu and the participant
+  menu, listing the Nextcloud users in the call who sent `hello` with the `ctl` role.
+- An incoming request opens main's consent window (`RemoteControlConsent.vue`): an icon, "Request
+  to control your computer", the display name and the login, one sentence saying what will be
+  controlled (the shared screen, all screens, or the window "…"), the revoke shortcut, note cards
+  for a taken shortcut and for window mode, the clipboard checkbox, then "Decline" (focused) and
+  "Allow" (enabled after 1 s). It takes the height of its content and declines on its own after 30 s.
+- During a session: the banner at the top of the screen under the cursor (`RemoteControlBanner.vue`)
+  - "Controlled by Name (login)" or the reason of a pause, "Bring to front" in window mode, "Take
+  back". It takes the width of its content and can be dragged aside.
+- Settings → "Screen sharing": "Allow giving control of a shared screen" and "Shared clipboard
+  (text) while controlled"; on macOS the description explains the Accessibility permission and
+  its loss with every build.
 
 **Controller:**
 
-- On the big screen share of a presenter whose `cap` has `ok`: a "Request control" button. With
-  `ok: false` the button is disabled and says why (macOS without the permission, Wayland).
+- "Request control" in the **top right corner of a screen share shown big**, when the presenter
+  runs a build with the module (`hello` with the `host` role) and shares something (`cap.src`). With
+  `ok: false` the button is disabled and the reason is shown next to it (macOS without the
+  permission, Wayland, disabled in the settings). There is no button on the small tiles, in the
+  participant stripe or on the compact call overlay of change 1.
+- While waiting: "Waiting for the presenter to allow control …"; a decline or a timeout is shown
+  next to the button.
 - During an active session, a layer over the `<video>` in `ScreenShare.vue`:
   - upstream's panzoom is paused (`instance.pause()`) and the double-click zoom is disabled (the
     `@dblclick.capture` handler on the container, `ScreenShare.vue:10` and `:168`). The wheel,
@@ -716,9 +731,13 @@ globally by a Talk Desktop setting.
     on a large screen is easier to read that way;
   - `VideoBottomBar` (`ScreenShare.vue:42`) is hidden: it lies on the bottom edge of the frame,
     exactly where the presenter's taskbar is;
-  - a border around the video and a toolbar: "Full screen", "Give back control", "Send
-    clipboard", "Cmd → Ctrl" (when the OSes differ), state hints;
-- while `paused`/`blocked`: a translucent hint with the reason, nothing is sent.
+  - an outline around the video (orange; red while the layer has the keyboard focus) and a
+    toolbar: "Stop control", "Send clipboard", "Use Cmd as Ctrl" / "Use Ctrl as Cmd" (when the OSes
+    differ), state hints. Keys are captured only while the layer has the focus ("Click on the
+    screen to type"), so the chat next to the call stays usable;
+  - in window mode a permanent hint that menus and dialogs are not visible;
+- while `paused`/`blocked`: a hint with the reason, nothing is sent. A refused click keeps its
+  reason on screen for at least 3 s.
 
 **Strings live only in Talk Desktop's l10n** (`talk_desktop`, Russian written by hand, as for
 change 5). The spreed connector has no strings at all: `scripts/refresh-talk-l10n.sh` replaces
@@ -727,14 +746,18 @@ fork string there would show untranslated.
 
 ## Packaging
 
-- **koffi is not packaged for macOS today.** The `packageAfterCopy` hook
-  (`forge.config.js:178`) returns early for anything but `win32` (`:181`). For the universal dmg,
-  copy both `build/koffi/darwin_x64` and `build/koffi/darwin_arm64` into **both** architecture
-  builds, so `@electron/universal` sees identical files on both sides and merges them without
-  complaint. `asar.unpack` (`:242`) already covers `**/node_modules/koffi/**`. Check that the
-  ad-hoc signature covers the unpacked `.node` and that the app starts on Intel and Apple Silicon.
+- **koffi is packaged for Windows, macOS and Linux.** The `packageAfterCopy` hook in
+  `forge.config.js` copies `node_modules/koffi` into the package, keeping only the prebuilt of the
+  target (`win32_<arch>`, `linux_<arch>`). The universal macOS app is merged from an x64 and an
+  arm64 build, so **both** `darwin_x64` and `darwin_arm64` go into **both** halves, and
+  `packagerConfig.osxUniversal.x64ArchFiles: '**/node_modules/koffi/build/koffi/**'` tells
+  `@electron/universal` that these identical single-architecture files are intended (without it
+  the merge fails). `asar.unpack` covers `**/node_modules/koffi/**`. Verified in `build-rc-1`:
+  `lipo -archs` gives `x86_64` and `arm64` for the two `.node` files, the bundle is ad-hoc signed,
+  the Linux zip carries `linux_x64/koffi.node`.
 - **Electron fuses** (v2.3.4+): `OnlyLoadAppFromAsar` and embedded asar integrity are on. koffi is
-  unpacked and has been proven to load on Windows by change 2; macOS has to be proven the same way.
+  unpacked and has been proven to load on Windows by change 2; on macOS the injector has been
+  loaded from source in Electron, the packaged app still has to prove it with a real session.
 - **TCC on macOS:** see [Constraints](#constraints-that-cannot-be-worked-around). The user guide
   needs a step "after installing a new build: System Settings → Privacy & Security →
   Accessibility → remove Nextcloud Talk with '−', add it again".
@@ -760,11 +783,13 @@ Talk Desktop (`build/custom`):
 | `forge.config.js:178`, `:242`, `:274` | koffi copy hook, asar unpack, ad-hoc signing | macOS packaging |
 | `scripts/refresh-talk-l10n.sh` | Replaces spreed's `l10n/` | No strings in the connector |
 
-**The screensharing indicator is a prerequisite and is not finished.** It exists as two
-untracked files (`src/app/screenshareIndicator.window.ts`,
-`src/talk/renderer/screensharing/screenshareIndicator.ts`) and `stash@{0}` "screenshare indicator
-WIP — отложено на время сборки build-16". The stash holds the `main.js`/`preload.js` wiring and
-the `CUSTOM-BUILD.md` section, where it is planned as change 6. It is not in any build. What
+**The screensharing indicator** (`src/app/screenshareIndicator.window.ts`,
+`src/talk/renderer/screensharing/screenshareIndicator.ts`) was restored from the draft kept in
+`stash@{0}` and is the first commit of `feat/remote-control`. The stash itself was not dropped.
+Since `build-rc-4` the border is 1 px, and on Windows the strips are created with
+`thickFrame: false` and clipped with `setShape`: frameless windows there keep the caption style,
+whose minimum height made the top strip some 30-40 px thick (see
+[Testing log](#testing-log)). What
 control takes from it:
 
 - four click-through strips per display (`getBorderBounds`, `:58`), which the hit test has to
@@ -790,7 +815,8 @@ spreed (`.overrides/spreed`, `build/custom` on v25.0.8):
 
 ## Implementation status
 
-On branch `feat/remote-control` of both forks (2026-11-20); not tested in a live call yet.
+On branch `feat/remote-control` of both forks (2026-11-20). First live session between a
+Windows presenter and a macOS controller on 2026-11-20, see [Testing log](#testing-log).
 
 | Part of the plan | State |
 |---|---|
@@ -800,13 +826,99 @@ On branch `feat/remote-control` of both forks (2026-11-20); not tested in a live
 | macOS injector (CGEvent, CGWindowList, Accessibility) | Done; window list and hit test checked on a Mac, injection not yet |
 | Linux X11 injector | Done, untested; Wayland not supported |
 | Clipboard both ways, attribution, password-manager formats | Done |
-| Consent window, banner, control layer, key capture, Cmd ↔ Ctrl, settings, kill switch, ru strings | Done |
+| Consent window, banner, control layer, key capture, Cmd ↔ Ctrl, settings, kill switch, ru strings | Done; consent window and banner reworked after the first test (`build-rc-3`) |
 | koffi in the universal macOS build and on Linux | Done |
 | Presenter **offering** control (screen-share and participant menus) | Not done: only the controller's request, to keep the spreed connector small |
 | "Take back" inside the call window | Not done: the banner and the shortcut cover it |
 | Cmd ↔ Ctrl only in shortcuts with a letter or digit | Simplified: the modifier is mapped as a whole while the toggle is on |
 | Raising an occluded window on macOS and Linux | Not done, left to the pilot as planned |
 | Measurements, the open questions below, pilot | Pending |
+
+## Test builds and debugging
+
+**Branches.** The prototype lives on `feat/remote-control` in both forks, `build/custom` and the
+`build-N` numbering are untouched. On the talk-desktop branch the last commit,
+`ci: build the remote control test branch with its spreed branch`, makes the workflow bundle
+spreed from `feat/remote-control` instead of `build/custom` (`SPREED_REF`). **Drop that commit when
+the branch is merged into `build/custom`.**
+
+**Test builds** are started by `build-rc-N` tags, so they never collide with release builds:
+
+```sh
+git tag build-rc-5 && git push fork build-rc-5
+gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
+```
+
+| Tag | Contents | State |
+|---|---|---|
+| `build-rc-1` | Indicator, remote control (Windows, macOS, Linux X11), docs | Built, tested 2026-11-20 |
+| `build-rc-2` | + the reason of a refused click stays visible for 3 s | Built |
+| `build-rc-3` | + consent window and banner reworked, 1 px border | Cancelled in favour of rc-4 |
+| `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Current |
+
+Locally (macOS) the dmg and the Linux zip build as in [CUSTOM-BUILD.md](CUSTOM-BUILD.md#locally),
+with `CHANNEL=stable`: while HEAD carries a `build-*` tag, the dev channel fails in
+`getFullVersion` (`webpack.renderer.config.js`), which expects a tag `v<package version>`. The same
+applies to `npm run dev`.
+
+**Reading a packaged client.** Talk Desktop has no file log of its own:
+
+- the renderer console goes to stderr with `--enable-logging=stderr`:
+  `"/Applications/Nextcloud Talk.app/Contents/MacOS/Nextcloud Talk" --enable-logging=stderr > talk.log 2>&1`
+  (on Windows the same switch on `Nextcloud Talk.exe`). Talk keeps running in the tray, and
+  quitting it during a call waits for a confirmation, so stop the running instance first, or the new
+  one hands over to it and exits;
+- the signaling traffic: add `--remote-debugging-port=9333 --remote-allow-origins=http://127.0.0.1:9333`,
+  attach to the Talk page from `http://127.0.0.1:9333/json/list` over the DevTools protocol, enable
+  `Network` and watch `Network.webSocketFrameSent`/`Received` for `"type":"rc"`. Every `rc` message
+  of both sides is visible there, with the server-set `sender.userid`. The port listens on loopback
+  only; do not leave it on;
+- the presenter's main process writes `remote-control.log` (grants, revokes, refused requests,
+  clipboard sizes) next to the app's logs: `%APPDATA%\Nextcloud Talk\logs` on Windows,
+  `~/Library/Logs/Nextcloud Talk` on macOS.
+
+**Rendering the consent window and the banner without a session.** Start the dev app with the main
+process inspector, `CHANNEL=stable npx electron-forge start --inspect-electron`, and evaluate in
+the main process over `ws://127.0.0.1:9229` (`process.mainModule.require('electron')`): open a
+`BrowserWindow` with the preload `.webpack/renderer/talk_desktop__window_remote_control/preload.cjs`
+on `https://app/talk_desktop__window_remote_control/index.html?mode=consent&name=…&login=…&what=window&title=…&clipboard=true&shortcut=false&windowMode=true`
+(or `?mode=banner`, then send it `remoteControl:banner` with a state), and save
+`webContents.capturePage()`. The windows take the language of the Nextcloud profile
+(`appData.userMetadata.language`), the system language only without a login. When the dev app
+cannot resolve `localhost` (seen during a network outage), re-handle the `https` protocol in the
+main process to proxy `https://app/…` to `http://127.0.0.1:3000`.
+
+## Testing log
+
+**2026-11-20, `build-rc-1`.** Presenter: Windows, a.mamina, English interface. Controller: macOS,
+Russian interface. Production HPB.
+
+- At first neither client could connect to chats or send messages. That was a network outage,
+  not the build: after it passed, the client log showed the signaling connected, rooms joined and
+  chats loaded (one `ERR_CERT_AUTHORITY_INVALID` on the very first request, then normal).
+- `hello`/`cap`, the request, the consent window, `accept`, heartbeats both ways and the session
+  work over the production HPB; the traffic was read from the controller's signaling socket.
+- The controller's clicks landed on the presenter's own Talk window (the call bar at the bottom
+  of her screen) and were refused with `own-window`, as designed. The reason was shown for a
+  fraction of a second only, because the release of the refused press reported `active` again.
+  Fixed in `build-rc-2`: only an accepted press clears it, and the controller keeps it at least 3 s.
+  **For a test the presenter has to minimise Talk or put another window in front.**
+- The "Request control" button was not visible at first; once both clients had exchanged `hello`
+  in the call it was. If it is missing, check the conditions in [User interface](#user-interface)
+  and the `rc` traffic.
+- Consent window: the buttons were cut off (fixed height, longer Russian text), the title of a
+  shared window showed `&quot;` (`t()` escapes parameters, Vue escapes once more), and the layout
+  was flat. Reworked: icon, title, who asks, what they will control, warnings as note cards; the
+  window takes the height of its content (`remoteControl:consentResize`), parameters are passed with
+  `{ escape: false }`. The text follows the interface language, as the rest of the app.
+- Banner: the name was truncated. It now takes the width of its content
+  (`remoteControl:bannerResize`) and stays where it is when it grows.
+- Indicator border: 4 px → 1 px; the top strip was much thicker on Windows (caption minimum
+  height of frameless windows), fixed in `build-rc-4`.
+
+Not tested yet: input actually reaching the presenter's desktop, the keyboard and layouts,
+the clipboard, window mode, macOS and Linux presenters, latency over the VPN, the open questions
+below and the rest of the [test plan](#test-plan).
 
 ## Open questions for the prototype
 
