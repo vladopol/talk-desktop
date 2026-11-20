@@ -673,8 +673,10 @@ function handleInput(from: string, raw: unknown) {
 					return reportBlocked(current, hit === 'window-occluded' ? 'window-occluded' : hit === 'own-window' ? 'own-window' : 'outside')
 				}
 				current.copyIntentAt = performance.now()
+				// Only a press that went through clears the hint; the release of a refused
+				// press is not one
+				reportBlocked(current, null)
 			}
-			reportBlocked(current, null)
 			injector!.button(input.b as MouseButton, input.d, point, input.n)
 			current.injectedCursor = point
 			return
