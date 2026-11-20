@@ -828,7 +828,7 @@ Windows presenter and a macOS controller on 2026-11-20, see [Testing log](#testi
 | Windows injector, window mode (owner chain, focus rule, states, "Bring to front") | Done; window mode works on Windows (`build-rc-6`) |
 | macOS injector (CGEvent, CGWindowList, Accessibility) | Done; window list and hit test checked on a Mac, injection not yet |
 | Linux X11 injector | Done, untested; Wayland not supported |
-| Clipboard both ways, attribution, password-manager formats | Done |
+| Clipboard both ways, attribution, password-manager formats | Done; copy and paste with the shortcuts work (`build-rc-11`) |
 | Consent window, banner, control layer, key capture, Cmd ↔ Ctrl, settings, kill switch, ru strings | Done; consent window and banner reworked after the first test (`build-rc-3`) |
 | "Request control" in the call's bottom bar | Done (`build-rc-6`), works; moved next to the screen share button with its own tooltip in `build-rc-7` |
 | Clients getting to know each other (`hello`/`cap`) whatever the order of joining | Fixed in `build-rc-5`, confirmed with `build-rc-6` |
@@ -1003,8 +1003,12 @@ an application window (window mode) works on a Windows presenter. Found:
   Recording grant just like the Accessibility one; `app:getDesktopCapturerSources` (stock
   behaviour) then opens System Settings and closes the source dialog.
 
+**`build-rc-11`, 2026-11-20:** the shared clipboard works with the copy and paste shortcuts.
+Not checked: the "Send clipboard" button (paste through a menu), large texts split into parts,
+password-manager formats kept out.
+
 Not tested yet: input into the presenter's whole desktop, the keyboard and layouts,
-the clipboard, macOS and Linux presenters, latency over the VPN, the open questions
+macOS and Linux presenters, latency over the VPN, the open questions
 below and the rest of the [test plan](#test-plan).
 
 ## Open questions for the prototype
