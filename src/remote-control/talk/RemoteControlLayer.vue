@@ -12,8 +12,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import IconClipboardArrowUpOutline from 'vue-material-design-icons/ClipboardArrowUpOutline.vue'
-import IconCursorDefaultClickOutline from 'vue-material-design-icons/CursorDefaultClickOutline.vue'
 import IconStop from 'vue-material-design-icons/Stop.vue'
+import { getDeclineReason, getUnavailableReason } from './reasons.ts'
 
 const props = defineProps<{
 	client: Client
@@ -29,50 +29,11 @@ const focused = ref(false)
 const state = computed<ControlState>(() => props.client.state(props.presenter))
 const peer = computed(() => props.peers.get(props.presenter))
 const inSession = computed(() => ['active', 'paused', 'blocked', 'lost'].includes(state.value.status))
-const canRequest = computed(() => state.value.status === 'idle' && props.client.canRequest(props.presenter))
 const showRequest = computed(() => state.value.status === 'idle' && !!peer.value?.roles.includes('host') && !!peer.value.cap?.src)
 const isMac = window.systemInfo?.isMac
 
-const unavailableReason = computed(() => {
-	const why = peer.value?.cap?.why
-	switch (why) {
-		case 'permission':
-			return t('talk_desktop', 'The presenter has not allowed Talk to control their computer yet')
-		case 'disabled':
-			return t('talk_desktop', 'The presenter does not allow control')
-		case 'wayland':
-			return t('talk_desktop', 'The presenter uses Wayland, where control is not supported yet')
-		case 'unsupported':
-		case 'bindings':
-			return t('talk_desktop', 'This screen share cannot be controlled')
-		default:
-			return ''
-	}
-})
-
-const declineReason = computed(() => {
-	switch (state.value.why) {
-		case 'user':
-			return t('talk_desktop', 'The presenter declined or ended the control')
-		case 'timeout':
-			return t('talk_desktop', 'The presenter did not answer')
-		case 'busy':
-			return t('talk_desktop', 'The presenter is busy, try again later')
-		case 'disabled':
-			return t('talk_desktop', 'The presenter does not allow control')
-		case 'unavailable':
-			return t('talk_desktop', 'This screen share cannot be controlled')
-		case 'share-ended':
-		case 'window-closed':
-			return t('talk_desktop', 'Control ended: the screen share has ended')
-		case 'hb-lost':
-			return t('talk_desktop', 'Control ended: the connection was lost')
-		case null:
-			return ''
-		default:
-			return t('talk_desktop', 'Control ended')
-	}
-})
+const unavailableReason = computed(() => getUnavailableReason(peer.value))
+const declineReason = computed(() => getDeclineReason(state.value))
 
 const stateHint = computed(() => {
 	if (state.value.status === 'lost') {
@@ -281,21 +242,10 @@ function setFocused(value: boolean) {
 			@blur="setFocused(false)" />
 
 		<div class="remote-control__toolbar">
-			<template v-if="showRequest">
-				<NcButton
-					variant="primary"
-					:disabled="!canRequest"
-					:title="unavailableReason"
-					@click="client.request(presenter)">
-					<template #icon>
-						<IconCursorDefaultClickOutline :size="20" />
-					</template>
-					{{ t('talk_desktop', 'Request control') }}
-				</NcButton>
-				<span v-if="unavailableReason || declineReason" class="remote-control__hint">
-					{{ unavailableReason || declineReason }}
-				</span>
-			</template>
+			<!-- The request button is in the call's bottom bar, the reason stays next to the screen -->
+			<span v-if="showRequest && (unavailableReason || declineReason)" class="remote-control__hint">
+				{{ unavailableReason || declineReason }}
+			</span>
 
 			<span v-else-if="state.status === 'requesting'" class="remote-control__hint">
 				{{ t('talk_desktop', 'Waiting for the presenter to allow control …') }}

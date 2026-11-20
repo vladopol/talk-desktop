@@ -717,11 +717,14 @@ globally by a Talk Desktop setting.
 
 **Controller:**
 
-- "Request control" in the **top right corner of a screen share shown big**, when the presenter
-  runs a build with the module (`hello` with the `host` role) and shares something (`cap.src`). With
-  `ok: false` the button is disabled and the reason is shown next to it (macOS without the
-  permission, Wayland, disabled in the settings). There is no button on the small tiles, in the
-  participant stripe or on the compact call overlay of change 1.
+- "Request control" is an icon button in the **call's bottom bar, after the reactions**
+  (`RemoteControlCallButton.vue`, mounted by spreed's `BottomBar.vue`). It is about the screen
+  share shown big: it appears when that presenter runs a build with the module (`hello` with the
+  `host` role) and shares something (`cap.src`). With `ok: false` it is disabled and its tooltip
+  says why (macOS without the permission, Wayland, disabled in the settings); the reason, a
+  decline or a timeout is also shown in the top right corner of the screen share. During a
+  session the same button is highlighted and stops control. Nothing is shown for the small tiles,
+  the participant stripe or the compact call overlay of change 1.
 - While waiting: "Waiting for the presenter to allow control …"; a decline or a timeout is shown
   next to the button.
 - During an active session, a layer over the `<video>` in `ScreenShare.vue`:
@@ -854,7 +857,9 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-1` | Indicator, remote control (Windows, macOS, Linux X11), docs | Built, tested 2026-11-20 |
 | `build-rc-2` | + the reason of a refused click stays visible for 3 s | Built |
 | `build-rc-3` | + consent window and banner reworked, 1 px border | Cancelled in favour of rc-4 |
-| `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Current |
+| `build-rc-4` | + border thin on Windows (`thickFrame: false`, `setShape`) | Built (macOS job lost to GitHub runner capacity; dmg built locally) |
+| `build-rc-5` | + every first `hello` answered, early `cap` kept, layer waits for the module | Cancelled in favour of rc-6 |
+| `build-rc-6` | + "Request control" moved to the call's bottom bar | Current |
 
 Locally (macOS) the dmg and the Linux zip build as in [CUSTOM-BUILD.md](CUSTOM-BUILD.md#locally),
 with `CHANNEL=stable`: while HEAD carries a `build-*` tag, the dev channel fails in
@@ -915,6 +920,18 @@ Russian interface. Production HPB.
   (`remoteControl:bannerResize`) and stays where it is when it grows.
 - Indicator border: 4 px → 1 px; the top strip was much thicker on Windows (caption minimum
   height of frameless windows), fixed in `build-rc-4`.
+
+**2026-11-20, `build-rc-4`.** The "Request control" button was missing again. Cause: a race when
+the two clients get to know each other. A client only accepts `rc` messages from participants it
+already sees in the call (the HPB delivers from any session), and the two sides learn about each
+other at slightly different times. The controller's first `hello` was dropped by the presenter and
+never repeated; the presenter's own `hello` was not answered, because the controller had already
+"sent" its one. The presenter therefore never learned about the controller and sent it no `cap`.
+Fixed in `build-rc-5`: every first `hello` is answered with `re: true` (answers are not answered),
+a `cap` arriving before its sender's `hello` is kept, and the control layer waits for the module to
+attach instead of giving up when the screen share was shown first. `hello` and `cap` are logged to
+the console (`[remote-control] hello from …`). On request, `build-rc-6` moves the button into the
+call's bottom bar.
 
 Not tested yet: input actually reaching the presenter's desktop, the keyboard and layouts,
 the clipboard, window mode, macOS and Linux presenters, latency over the VPN, the open questions
