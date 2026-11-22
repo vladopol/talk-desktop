@@ -36,6 +36,9 @@ const text = computed(() => {
 				return t('talk_desktop', 'Paused: connection lost · {name}', { name }, undefined, { escape: false })
 		}
 	}
+	if (state.value.elevated) {
+		return t('talk_desktop', '{name} cannot control administrator windows · minimize it', { name }, undefined, { escape: false })
+	}
 	return t('talk_desktop', 'Controlled by {name}', { name }, undefined, { escape: false })
 })
 

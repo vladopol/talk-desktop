@@ -4,7 +4,7 @@
  */
 
 import type * as Koffi from 'koffi'
-import type { ControlledSource, HitResult, Injector, KeyTargetResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
+import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
 
 import { clipboard, screen, systemPreferences } from 'electron'
@@ -268,6 +268,14 @@ export class MacInjector implements Injector {
 
 	bringToFront() {
 		// Needs the Accessibility API (AXRaise); left to the pilot to decide on
+	}
+
+	foregroundElevated() {
+		return false
+	}
+
+	async leaveElevated(): Promise<LeaveElevatedResult> {
+		return 'not-elevated'
 	}
 
 	cursor(): OsPoint | null {

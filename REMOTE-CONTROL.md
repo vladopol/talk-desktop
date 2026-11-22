@@ -83,6 +83,11 @@ Decisions taken from how others do it:
   than Talk: UAC prompts, an elevated Task Manager, installers. `SendInput` then silently does
   nothing. Ctrl+Alt+Del, Win+L and the secure desktop are out of reach, and the secure desktop
   is black in the capture anyway. Talk is never run elevated for this.
+  What can be done without it (since `build-rc-12`): the presenter's Talk tells such windows
+  apart, refuses clicks, wheel and keys into them with the reason `elevated`, keeps moving the
+  pointer (so it can reach the taskbar, whose clicks do get through), and on the controller's
+  "Switch window" (`esc`) gets the elevated window out of the way with window manager calls,
+  which are not input: see [Windows](#windows), "Elevated windows".
 - **macOS needs the Accessibility permission, and the fork loses it with every build.** The
   builds are ad-hoc signed (`osxSign: { identity: '-' }` in `forge.config.js`, see
   [CUSTOM-BUILD.md](CUSTOM-BUILD.md#signing)), and TCC records the grant against the code
@@ -268,9 +273,10 @@ Every message is `{ type: 'rc', v: 1, op, sid, seq, t, … }`:
 | `wheel` | controller → presenter | `dx`, `dy` in 1/120 of a notch, at most ±1200 per message | Scrolling, including smooth touchpad scrolling |
 | `key` | controller → presenter | `code` (`KeyboardEvent.code`), `d` | A physical key |
 | `rel` | controller → presenter | — | Release everything held: the layer lost focus, the window was minimised, the connection came back |
+| `esc` | controller → presenter | — | Get an elevated foreground window out of the way (Windows): raise an ordinary window, else minimise it. Answered with `state`: `blocked`/`elevated-failed` when neither worked |
 | `clip` | both ways | `cid`, `i`, `n`, `data` (a part of the text, at most 16 KiB of UTF-8) | Clipboard, see [Shared clipboard](#shared-clipboard) |
 | `hb` | both ways | — | Heartbeat, once per second |
-| `state` | presenter → controller | `s`: `active`/`paused`/`blocked`, `why` | Pause or block: `local-input`, `window-hidden`, `window-occluded`, `focus-elsewhere`, `hb-lost` |
+| `state` | presenter → controller | `s`: `active`/`paused`/`blocked`, `why` | Pause or block: `local-input`, `window-hidden`, `window-occluded`, `focus-elsewhere`, `hb-lost`, `own-window`, `outside`, `resizing`, `elevated` (the window at the point or in the foreground runs as administrator; repeated while it is in the foreground), `elevated-failed` |
 | `revoke` | either → the other | `sid`, `why` | End of the session |
 
 ### Session states (presenter, kept in main)
@@ -430,6 +436,28 @@ except to locate a monitor once.
   dwExtraInfo`). `sizeof(INPUT)` is 40 on x64. With a wrong `cbSize` `SendInput` returns 0 and
   does nothing.
 - Under UIPI `SendInput` fails silently; its return value is not a reliable signal.
+
+**Elevated windows** (`build-rc-12`). A top-level window is *elevated* when its process has a
+higher mandatory integrity level than Talk: `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` →
+`OpenProcessToken(TOKEN_QUERY)` → `GetTokenInformation(TokenIntegrityLevel)`, the RID of the
+label SID `S-1-16-RID` (0x2000 medium, 0x3000 high). A process whose token cannot be read counts
+as elevated (input does not reach it either); levels are cached per process for 2 s, since the
+check runs on every move. `hitTest` and `keyTarget` answer `elevated` for such windows:
+
+- clicks, wheel and keys into them are not injected, the controller sees the reason;
+- moves are still injected: dropped over the elevated window, they work elsewhere, so the pointer
+  reaches the taskbar or another window, and a click there switches away as it would locally;
+- while the foreground window is elevated the presenter re-reports `blocked`/`elevated` every
+  watchdog tick, the controller shows "Switch window", and the presenter's banner says to minimise it;
+- `esc`: `SwitchToThisWindow` to the shared window (window share) or the next visible, captioned,
+  non-tool, non-elevated, non-Talk window below in the Z order (else the shell window), then
+  `SetForegroundWindow`, then `ShowWindowAsync(SW_MINIMIZE)` of the elevated window; each step is
+  checked for up to 300 ms, the result is logged as `leave-elevated`.
+
+**Local input is a cursor that moved.** The local-input check compares the cursor with the
+injected point only when the cursor moved since the previous poll. Before `build-rc-12` a
+cursor stuck over an elevated window (dropped moves) counted as the presenter moving the mouse:
+the session paused itself in a loop and the controller could not get out.
 
 **Hit test before every button and wheel event, in every mode:** `WindowFromPoint` →
 `GetAncestor(hwnd, GA_ROOT = 2)`. If the window belongs to Talk itself

@@ -38,6 +38,8 @@ export type BannerState = {
 	windowMode: boolean
 	state: 'active' | 'paused' | 'blocked'
 	why: string | null
+	/** The foreground window is elevated: the controller can neither click nor type into it */
+	elevated: boolean
 	clipboard: string | null
 }
 

@@ -29,11 +29,17 @@ export type ControlledSource = {
 	displayId: string | null
 }
 
-/** Where a pointer event would land */
-export type HitResult = 'ok' | 'own-window' | 'window-occluded' | 'outside'
+/**
+ * Where a pointer event would land. 'elevated': a window of a process with a higher integrity
+ * level than Talk, which the OS does not let injected input reach (Windows UIPI).
+ */
+export type HitResult = 'ok' | 'own-window' | 'window-occluded' | 'outside' | 'elevated'
 
 /** Where a key would go */
-export type KeyTargetResult = 'ok' | 'own-window' | 'focus-elsewhere'
+export type KeyTargetResult = 'ok' | 'own-window' | 'focus-elsewhere' | 'elevated'
+
+/** What leaving an elevated foreground window did */
+export type LeaveElevatedResult = 'not-elevated' | 'switched' | 'minimized' | 'failed'
 
 /** State of a shared window */
 export type WindowStateResult = 'normal' | 'hidden' | 'gone'
@@ -63,6 +69,13 @@ export interface Injector {
 	windowState(source: ControlledSource): WindowStateResult
 	/** Restore and raise the shared window; only works while Talk is the foreground app */
 	bringToFront(source: ControlledSource): void
+	/** Whether the foreground window is elevated, so that neither keys nor clicks into it get through */
+	foregroundElevated(): boolean
+	/**
+	 * Get an elevated foreground window out of the way without injected input, which it does not
+	 * receive: raise an ordinary window (the shared one for a window share), or minimise it
+	 */
+	leaveElevated(source: ControlledSource): Promise<LeaveElevatedResult>
 	/** The current cursor position */
 	cursor(): OsPoint | null
 	move(point: OsPoint): void

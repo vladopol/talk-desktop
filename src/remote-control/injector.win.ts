@@ -4,10 +4,11 @@
  */
 
 import type * as Koffi from 'koffi'
-import type { ControlledSource, HitResult, Injector, KeyTargetResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
+import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
 
 import { screen } from 'electron'
+import { performance } from 'node:perf_hooks'
 
 // See REMOTE-CONTROL.md, "Injecting input into the OS" - "Windows"
 const INPUT_MOUSE = 0
@@ -46,6 +47,21 @@ const WS_EX_TRANSPARENT = 0x00000020
 const DWMWA_EXTENDED_FRAME_BOUNDS = 9
 const DWMWA_CLOAKED = 14
 const SW_RESTORE = 9
+const SW_MINIMIZE = 6
+const GW_HWNDNEXT = 2
+const WS_EX_TOOLWINDOW = 0x00000080
+const WS_EX_NOACTIVATE = 0x08000000
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+const TOKEN_QUERY = 0x0008
+const TOKEN_INTEGRITY_LEVEL_CLASS = 25
+/** S-1-16-…: revision 1, one sub-authority, SECURITY_MANDATORY_LABEL_AUTHORITY */
+const MANDATORY_LABEL_SID_PREFIX = [1, 1, 0, 0, 0, 0, 0, 16]
+/** How long the integrity level of a process is trusted: moves come 60 times a second */
+const INTEGRITY_CACHE_MS = 2000
+const ZORDER_LIMIT = 512
+/** How long to wait for a foreground change to show, and how often to look */
+const FOREGROUND_CHECKS = 6
+const FOREGROUND_CHECK_INTERVAL = 50
 const MENU_CLASS = '#32768'
 const OWNER_CHAIN_LIMIT = 32
 
@@ -79,6 +95,14 @@ type Bindings = {
 	ShowWindow: (hwnd: number, cmd: number) => boolean
 	SetForegroundWindow: (hwnd: number) => boolean
 	GetCursorPos: (point: Record<string, number>) => boolean
+	IsWindowVisible: (hwnd: number) => boolean
+	ShowWindowAsync: (hwnd: number, cmd: number) => boolean
+	SwitchToThisWindow: (hwnd: number, altTab: boolean) => void
+	GetShellWindow: () => number
+	OpenProcess: (access: number, inherit: boolean, pid: number) => number
+	CloseHandle: (handle: number) => boolean
+	OpenProcessToken: (process: number, access: number, token: number[]) => boolean
+	GetTokenInformation: (token: number, infoClass: number, info: Uint8Array, length: number, returned: Uint32Array) => boolean
 	GetClipboardSequenceNumber: () => number
 	RegisterClipboardFormatW: (name: string) => number
 	IsClipboardFormatAvailable: (format: number) => boolean
@@ -99,6 +123,8 @@ function getBindings(): Bindings | null {
 		const koffi = require('koffi') as typeof Koffi
 		const user32 = koffi.load('user32.dll')
 		const dwmapi = koffi.load('dwmapi.dll')
+		const kernel32 = koffi.load('kernel32.dll')
+		const advapi32 = koffi.load('advapi32.dll')
 
 		koffi.struct('RC_POINT', { x: 'int32', y: 'int32' })
 		koffi.struct('RC_RECT', { left: 'int32', top: 'int32', right: 'int32', bottom: 'int32' })
@@ -130,6 +156,14 @@ function getBindings(): Bindings | null {
 			ShowWindow: user32.func('bool __stdcall ShowWindow(uintptr_t hwnd, int cmd)'),
 			SetForegroundWindow: user32.func('bool __stdcall SetForegroundWindow(uintptr_t hwnd)'),
 			GetCursorPos: user32.func('bool __stdcall GetCursorPos(_Out_ RC_POINT *point)'),
+			IsWindowVisible: user32.func('bool __stdcall IsWindowVisible(uintptr_t hwnd)'),
+			ShowWindowAsync: user32.func('bool __stdcall ShowWindowAsync(uintptr_t hwnd, int cmd)'),
+			SwitchToThisWindow: user32.func('void __stdcall SwitchToThisWindow(uintptr_t hwnd, bool altTab)'),
+			GetShellWindow: user32.func('uintptr_t __stdcall GetShellWindow()'),
+			OpenProcess: kernel32.func('uintptr_t __stdcall OpenProcess(uint32 access, bool inherit, uint32 pid)'),
+			CloseHandle: kernel32.func('bool __stdcall CloseHandle(uintptr_t handle)'),
+			OpenProcessToken: advapi32.func('bool __stdcall OpenProcessToken(uintptr_t process, uint32 access, _Out_ uintptr_t *token)'),
+			GetTokenInformation: advapi32.func('bool __stdcall GetTokenInformation(uintptr_t token, int infoClass, _Out_ uint8_t *info, uint32 length, _Out_ uint32_t *returned)'),
 			GetClipboardSequenceNumber: user32.func('uint32 __stdcall GetClipboardSequenceNumber()'),
 			RegisterClipboardFormatW: user32.func('uint __stdcall RegisterClipboardFormatW(str16 name)'),
 			IsClipboardFormatAvailable: user32.func('bool __stdcall IsClipboardFormatAvailable(uint format)'),
@@ -152,6 +186,9 @@ export class WindowsInjector implements Injector {
 	/** Pressed mouse buttons */
 	private pressedButtons = new Set<MouseButton>()
 	private sensitiveFormats: number[] | null = null
+	/** Integrity level of Talk itself: undefined until read, null when it cannot be read */
+	private ownIntegrity: number | null | undefined = undefined
+	private integrityCache = new Map<number, { level: number | null, at: number }>()
 
 	availability() {
 		return getBindings() ? { ok: true as const } : { ok: false as const, why: 'bindings' as const }
@@ -223,6 +260,9 @@ export class WindowsInjector implements Injector {
 			const exStyle = native.GetWindowLongW(root, GWL_EXSTYLE)
 			return (exStyle & WS_EX_TRANSPARENT) && source.kind !== 'window' ? 'ok' : 'own-window'
 		}
+		if (this.isElevatedWindow(native, root)) {
+			return 'elevated'
+		}
 		if (source.kind !== 'window') {
 			return 'ok'
 		}
@@ -242,6 +282,9 @@ export class WindowsInjector implements Injector {
 		if (this.isOwnWindow(native, root)) {
 			// Injected M, V and Space would toggle the presenter's microphone and camera
 			return 'own-window'
+		}
+		if (this.isElevatedWindow(native, root)) {
+			return 'elevated'
 		}
 		if (source.kind !== 'window') {
 			return 'ok'
@@ -265,11 +308,7 @@ export class WindowsInjector implements Injector {
 		if (native.IsIconic(source.windowId)) {
 			return 'hidden'
 		}
-		const cloaked = new Int32Array(1)
-		if (native.DwmGetWindowAttribute(source.windowId, DWMWA_CLOAKED, cloaked, 4) === 0 && cloaked[0]) {
-			return 'hidden'
-		}
-		return 'normal'
+		return this.isCloaked(native, source.windowId) ? 'hidden' : 'normal'
 	}
 
 	bringToFront(source: ControlledSource) {
@@ -281,6 +320,47 @@ export class WindowsInjector implements Injector {
 			native.ShowWindow(source.windowId, SW_RESTORE)
 		}
 		native.SetForegroundWindow(source.windowId)
+	}
+
+	foregroundElevated() {
+		const native = getBindings()
+		const root = native && this.foregroundRoot(native)
+		return !!native && !!root && !this.isOwnWindow(native, root) && this.isElevatedWindow(native, root)
+	}
+
+	/**
+	 * Neither SendInput nor Alt+Tab reaches an elevated foreground window, but the window
+	 * manager calls are not input: switching to an ordinary window, then minimising the elevated
+	 * one. Each step is checked, as both may be refused by the foreground lock.
+	 *
+	 * @param source - The shared source
+	 */
+	async leaveElevated(source: ControlledSource): Promise<LeaveElevatedResult> {
+		const native = getBindings()
+		if (!native) {
+			return 'failed'
+		}
+		const root = this.foregroundRoot(native)
+		if (!root || this.isOwnWindow(native, root) || !this.isElevatedWindow(native, root)) {
+			return 'not-elevated'
+		}
+		const target = this.ordinaryWindowBelow(native, root, source)
+		if (target) {
+			if (native.IsIconic(target)) {
+				native.ShowWindow(target, SW_RESTORE)
+			}
+			native.SwitchToThisWindow(target, true)
+			if (await this.waitForegroundLeft(native, root)) {
+				return 'switched'
+			}
+			native.SetForegroundWindow(target)
+			if (await this.waitForegroundLeft(native, root)) {
+				return 'switched'
+			}
+		}
+		// SW_MINIMIZE also activates the next window in the Z order
+		native.ShowWindowAsync(root, SW_MINIMIZE)
+		return await this.waitForegroundLeft(native, root) ? 'minimized' : 'failed'
 	}
 
 	cursor(): OsPoint | null {
@@ -388,6 +468,137 @@ export class WindowsInjector implements Injector {
 		return this.windowPid(native, hwnd).pid === process.pid
 	}
 
+	private foregroundRoot(native: Bindings) {
+		const foreground = native.GetForegroundWindow()
+		return foreground ? native.GetAncestor(foreground, GA_ROOT) || foreground : 0
+	}
+
+	private isCloaked(native: Bindings, hwnd: number) {
+		const cloaked = new Int32Array(1)
+		return native.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, cloaked, 4) === 0 && !!cloaked[0]
+	}
+
+	/**
+	 * Whether a top-level window belongs to a process with a higher integrity level than Talk
+	 * (run as administrator), which UIPI keeps injected input away from. A process whose level
+	 * cannot be read at all (its token is closed to Talk, a protected process) counts as one:
+	 * input does not reach it either. If Talk's own level cannot be read, nothing is elevated,
+	 * which is the behaviour without the check.
+	 *
+	 * @param native - Bindings
+	 * @param root - A top-level window
+	 */
+	private isElevatedWindow(native: Bindings, root: number) {
+		const { pid } = this.windowPid(native, root)
+		if (!pid || pid === process.pid) {
+			return false
+		}
+		if (this.ownIntegrity === undefined) {
+			// Through a real handle like any other process: the pseudo handle of
+			// GetCurrentProcess is -1, which does not fit a JS number as uintptr_t
+			this.ownIntegrity = this.processIntegrity(native, process.pid)
+		}
+		if (this.ownIntegrity === null) {
+			return false
+		}
+		const level = this.processIntegrity(native, pid)
+		return level === null || level > this.ownIntegrity
+	}
+
+	private processIntegrity(native: Bindings, pid: number) {
+		const now = performance.now()
+		const cached = this.integrityCache.get(pid)
+		if (cached && now - cached.at < INTEGRITY_CACHE_MS) {
+			return cached.level
+		}
+		let level: number | null = null
+		const handle = native.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+		if (handle) {
+			try {
+				level = this.tokenIntegrity(native, handle)
+			} finally {
+				native.CloseHandle(handle)
+			}
+		}
+		if (this.integrityCache.size > 256) {
+			this.integrityCache.clear()
+		}
+		this.integrityCache.set(pid, { level, at: now })
+		return level
+	}
+
+	/**
+	 * The mandatory integrity RID of a process token: 0x2000 medium, 0x3000 high, 0x4000 system
+	 *
+	 * @param native - Bindings
+	 * @param processHandle - A process handle with PROCESS_QUERY_LIMITED_INFORMATION
+	 */
+	private tokenIntegrity(native: Bindings, processHandle: number): number | null {
+		const token = [0]
+		if (!native.OpenProcessToken(processHandle, TOKEN_QUERY, token) || !token[0]) {
+			return null
+		}
+		try {
+			// TOKEN_MANDATORY_LABEL: a pointer to the label SID, which follows in the same buffer
+			const info = new Uint8Array(64)
+			const returned = new Uint32Array(1)
+			if (!native.GetTokenInformation(token[0], TOKEN_INTEGRITY_LEVEL_CLASS, info, info.length, returned)) {
+				return null
+			}
+			return parseIntegritySid(info.subarray(0, Math.min(returned[0]!, info.length)))
+		} finally {
+			native.CloseHandle(token[0])
+		}
+	}
+
+	/**
+	 * Wait until the foreground is no longer the given elevated window
+	 *
+	 * @param native - Bindings
+	 * @param root - The elevated window
+	 */
+	private async waitForegroundLeft(native: Bindings, root: number) {
+		for (let i = 0; i < FOREGROUND_CHECKS; i++) {
+			await new Promise((resolve) => setTimeout(resolve, FOREGROUND_CHECK_INTERVAL))
+			const foreground = this.foregroundRoot(native)
+			if (native.IsIconic(root) || (foreground && foreground !== root && !this.isElevatedWindow(native, foreground))) {
+				return true
+			}
+		}
+		return false
+	}
+
+	/**
+	 * The window to switch to from an elevated one: the shared window for a window share, else
+	 * the next ordinary application window below it in the Z order, else the desktop
+	 *
+	 * @param native - Bindings
+	 * @param elevated - The elevated foreground window
+	 * @param source - The shared source
+	 */
+	private ordinaryWindowBelow(native: Bindings, elevated: number, source: ControlledSource) {
+		if (source.kind === 'window') {
+			const shared = source.windowId
+			return shared && native.IsWindow(shared) && !this.isElevatedWindow(native, shared) ? shared : 0
+		}
+		let hwnd = native.GetWindow(elevated, GW_HWNDNEXT)
+		for (let i = 0; hwnd && i < ZORDER_LIMIT; i++, hwnd = native.GetWindow(hwnd, GW_HWNDNEXT)) {
+			if (!native.IsWindowVisible(hwnd) || native.IsIconic(hwnd) || native.GetWindow(hwnd, GW_OWNER)) {
+				continue
+			}
+			const style = native.GetWindowLongW(hwnd, GWL_STYLE) >>> 0
+			const exStyle = native.GetWindowLongW(hwnd, GWL_EXSTYLE) >>> 0
+			if ((style & WS_CAPTION) !== WS_CAPTION || (exStyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE))) {
+				continue
+			}
+			if (this.isCloaked(native, hwnd) || this.isOwnWindow(native, hwnd) || this.isElevatedWindow(native, hwnd)) {
+				continue
+			}
+			return hwnd
+		}
+		return native.GetShellWindow()
+	}
+
 	private className(native: Bindings, hwnd: number) {
 		const buffer = new Uint16Array(64)
 		const length = native.GetClassNameW(hwnd, buffer, buffer.length)
@@ -434,7 +645,8 @@ export class WindowsInjector implements Injector {
 
 	private sendMouse(native: Bindings, flags: number, mouseData = 0, dx = 0, dy = 0) {
 		const input = { type: INPUT_MOUSE, u: { mi: { dx, dy, mouseData, dwFlags: flags, time: 0, dwExtraInfo: 0 } } }
-		// Under UIPI (an elevated window at the point) SendInput fails silently
+		// Under UIPI (an elevated window at the point) SendInput fails silently; hitTest and
+		// keyTarget answer 'elevated' for those windows, so that the session can tell
 		native.SendInput(1, [input], native.sizeofInput)
 	}
 
@@ -469,6 +681,23 @@ export class WindowsInjector implements Injector {
 }
 
 type WinRect = { left: number, top: number, right: number, bottom: number }
+
+/**
+ * The RID of the mandatory label SID S-1-16-RID found in a TOKEN_MANDATORY_LABEL buffer.
+ * The SID is looked up by its fixed prefix rather than through the pointer in the structure.
+ *
+ * @param info - The buffer GetTokenInformation filled
+ */
+function parseIntegritySid(info: Uint8Array): number | null {
+	const prefix = MANDATORY_LABEL_SID_PREFIX
+	for (let i = 0; i + prefix.length + 4 <= info.length; i++) {
+		if (prefix.every((byte, k) => info[i + k] === byte)) {
+			const at = i + prefix.length
+			return (info[at]! | (info[at + 1]! << 8) | (info[at + 2]! << 16) | (info[at + 3]! << 24)) >>> 0
+		}
+	}
+	return null
+}
 
 /**
  * @param rect - A Win32 RECT
