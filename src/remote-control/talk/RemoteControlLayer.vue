@@ -13,6 +13,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import IconClipboardArrowUpOutline from 'vue-material-design-icons/ClipboardArrowUpOutline.vue'
 import IconStop from 'vue-material-design-icons/Stop.vue'
+import IconSwapHorizontal from 'vue-material-design-icons/SwapHorizontal.vue'
 import { getDeclineReason, getUnavailableReason } from './reasons.ts'
 
 const props = defineProps<{
@@ -59,10 +60,16 @@ const stateHint = computed(() => {
 			return t('talk_desktop', 'The window is being resized')
 		case 'hb-lost':
 			return t('talk_desktop', 'Connection lost, waiting for the controller …')
+		case 'elevated':
+			return t('talk_desktop', 'This window runs as administrator: Windows does not let it be controlled. Click "Switch window" or the taskbar')
+		case 'elevated-failed':
+			return t('talk_desktop', 'Could not switch away from the administrator window. Ask the presenter to minimize it')
 		default:
 			return ''
 	}
 })
+
+const showLeaveElevated = computed(() => state.value.status === 'blocked' && (state.value.why === 'elevated' || state.value.why === 'elevated-failed'))
 
 const mapLabel = computed(() => isMac
 	? t('talk_desktop', 'Use Cmd as Ctrl')
@@ -276,6 +283,16 @@ function setFocused(value: boolean) {
 						<IconStop :size="20" />
 					</template>
 					{{ t('talk_desktop', 'Stop control') }}
+				</NcButton>
+				<NcButton
+					v-if="showLeaveElevated"
+					variant="primary"
+					:title="t('talk_desktop', 'Bring an ordinary window to the front on the presenter\'s screen, or minimize the administrator window')"
+					@click="client.leaveElevated()">
+					<template #icon>
+						<IconSwapHorizontal :size="20" />
+					</template>
+					{{ t('talk_desktop', 'Switch window') }}
 				</NcButton>
 				<NcButton
 					v-if="state.clipboard"

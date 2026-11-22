@@ -55,7 +55,13 @@ type Session = Requester & {
 	rectCache: { rect: OsRect, at: number } | null
 	/** Where the injector last put the cursor */
 	injectedCursor: OsPoint | null
+	/** Where the cursor was at the previous local input check */
+	polledCursor: OsPoint | null
 	lastLocalInput: number
+	/** Whether the presenter's foreground window is elevated (Windows), for the banner */
+	foregroundElevated: boolean
+	/** A leaveElevated call in progress */
+	leaving: boolean
 	rate: { second: number, ptr: number, other: number }
 	/** Clipboard parts being received */
 	incoming: { cid: number, parts: string[], received: number, timer: NodeJS.Timeout } | null
@@ -302,7 +308,10 @@ function startSession(requester: Requester, source: ControlledSource, clipboardE
 		frame: null,
 		rectCache: null,
 		injectedCursor: null,
+		polledCursor: null,
 		lastLocalInput: 0,
+		foregroundElevated: false,
+		leaving: false,
 		rate: { second: 0, ptr: 0, other: 0 },
 		incoming: null,
 		copyIntentAt: 0,
@@ -400,6 +409,7 @@ function updateBanner(clipboardNote: string | null = null) {
 		windowMode: session.source.kind === 'window',
 		state: session.state,
 		why: session.stateWhy,
+		elevated: session.foregroundElevated,
 		clipboard: clipboardNote,
 	}, (action) => {
 		if (action === 'take-back') {
@@ -472,6 +482,22 @@ function watchdog(current: Session) {
 		windowHidden = state === 'hidden'
 	}
 
+	// The controller keeps the hint and the "Switch window" button for as long as the elevated
+	// window is in the foreground, wherever the pointer is: it may be over the taskbar
+	const elevated = injector!.foregroundElevated()
+	if (elevated !== current.foregroundElevated) {
+		current.foregroundElevated = elevated
+		rcLog('foreground-elevated', { from: current.from, elevated })
+		updateBanner()
+		if (!elevated && (current.blockedWhy === 'elevated' || current.blockedWhy === 'elevated-failed')) {
+			reportBlocked(current, null)
+		}
+	}
+	// Re-reported on every tick: a pause or an accepted click clears the reason in between
+	if (elevated && !current.blockedWhy) {
+		reportBlocked(current, 'elevated')
+	}
+
 	const localInput = now - current.lastLocalInput < LIMITS.LOCAL_INPUT_PAUSE
 	if (heartbeatLost || rendererLost) {
 		setState(current, 'paused', 'hb-lost')
@@ -485,21 +511,32 @@ function watchdog(current: Session) {
 }
 
 /**
- * Local input wins: when the cursor is not where the injector put it, the presenter moved
- * the mouse, and remote input pauses until LOCAL_INPUT_PAUSE after the last such movement
+ * Local input wins: when the cursor moved since the last check and is not where the injector
+ * put it, the presenter moved the mouse, and remote input pauses until LOCAL_INPUT_PAUSE after
+ * the last such movement.
+ *
+ * A cursor that did not move at all is not local input: it is injected input that did not
+ * land. Over an elevated window Windows drops injected moves, the cursor stays behind the
+ * injected point, and the session kept pausing itself as if the presenter were moving the mouse.
  *
  * @param current - The session
  */
 function watchLocalCursor(current: Session) {
-	if (session !== current || !current.injectedCursor) {
+	if (session !== current) {
 		return
 	}
 	const cursor = injector!.cursor()
 	if (!cursor) {
 		return
 	}
+	const previous = current.polledCursor
+	current.polledCursor = cursor
+	if (!current.injectedCursor || !previous) {
+		return
+	}
+	const moved = Math.hypot(cursor.x - previous.x, cursor.y - previous.y) > LIMITS.LOCAL_CURSOR_THRESHOLD
 	const distance = Math.hypot(cursor.x - current.injectedCursor.x, cursor.y - current.injectedCursor.y)
-	if (distance > LIMITS.LOCAL_CURSOR_THRESHOLD) {
+	if (moved && distance > LIMITS.LOCAL_CURSOR_THRESHOLD) {
 		current.lastLocalInput = performance.now()
 		current.injectedCursor = cursor
 		if (current.state === 'active') {
@@ -623,7 +660,7 @@ function handleInput(from: string, raw: unknown) {
 	if (message.op === 'revoke') {
 		return revoke('user', false)
 	}
-	if (!['frame', 'ptr', 'btn', 'wheel', 'key', 'rel', 'clip', 'hb'].includes(message.op)) {
+	if (!['frame', 'ptr', 'btn', 'wheel', 'key', 'rel', 'esc', 'clip', 'hb'].includes(message.op)) {
 		return
 	}
 	const input = message as RcInputMessage
@@ -673,10 +710,20 @@ function handleInput(from: string, raw: unknown) {
 			if (typeof point === 'string') {
 				return
 			}
+			// The move is sent anyway: it is harmless if dropped, and the cursor must be able to
+			// leave the elevated window. The controller learns why clicks there do nothing.
+			if (injector!.hitTest(point, current.source) === 'elevated') {
+				reportBlocked(current, 'elevated')
+			} else if (!current.foregroundElevated && current.blockedWhy === 'elevated') {
+				reportBlocked(current, null)
+			}
 			injector!.move(point)
 			current.injectedCursor = point
 			return
 		}
+		case 'esc':
+			leaveElevated(current)
+			return
 		case 'btn': {
 			const point = mapPoint(current, input.x, input.y, input.d)
 			// A release always goes through: a button must never stay down
@@ -689,7 +736,7 @@ function handleInput(from: string, raw: unknown) {
 			if (input.d) {
 				const hit = injector!.hitTest(point, current.source)
 				if (hit !== 'ok') {
-					return reportBlocked(current, hit === 'window-occluded' ? 'window-occluded' : hit === 'own-window' ? 'own-window' : 'outside')
+					return reportBlocked(current, hit)
 				}
 				current.copyIntentAt = performance.now()
 				// Only a press that went through clears the hint; the release of a refused
@@ -707,7 +754,7 @@ function handleInput(from: string, raw: unknown) {
 			}
 			const hit = injector!.hitTest(point, current.source)
 			if (hit !== 'ok') {
-				return reportBlocked(current, hit === 'window-occluded' ? 'window-occluded' : hit === 'own-window' ? 'own-window' : 'outside')
+				return reportBlocked(current, hit)
 			}
 			injector!.wheel(input.dx, input.dy, point)
 			current.injectedCursor = point
@@ -735,6 +782,40 @@ function handleInput(from: string, raw: unknown) {
 			}
 			injector!.key(key, true)
 		}
+	}
+}
+
+/**
+ * The controller asks to get an elevated foreground window out of the way: injected input,
+ * Alt+Tab included, does not reach it, so only the presenter's Talk can switch away from it
+ *
+ * @param current - The session
+ */
+async function leaveElevated(current: Session) {
+	if (current.leaving) {
+		return
+	}
+	current.leaving = true
+	try {
+		const result = await injector!.leaveElevated(current.source)
+		rcLog('leave-elevated', { from: current.from, result })
+		if (session !== current) {
+			return
+		}
+		if (result === 'failed') {
+			reportBlocked(current, 'elevated-failed')
+		} else {
+			current.foregroundElevated = injector!.foregroundElevated()
+			updateBanner()
+			reportBlocked(current, current.foregroundElevated ? 'elevated' : null)
+		}
+	} catch (error) {
+		console.error('[remote-control] leaveElevated failed:', error)
+		if (session === current) {
+			reportBlocked(current, 'elevated-failed')
+		}
+	} finally {
+		current.leaving = false
 	}
 }
 

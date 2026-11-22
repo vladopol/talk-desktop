@@ -5,7 +5,7 @@
 
 import type { Rectangle } from 'electron'
 import type * as Koffi from 'koffi'
-import type { ControlledSource, HitResult, Injector, KeyTargetResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
+import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
 
 import { clipboard, screen } from 'electron'
@@ -241,6 +241,14 @@ export class LinuxInjector implements Injector {
 	bringToFront() {
 		// Needs a _NET_ACTIVE_WINDOW client message; window managers handle focus stealing
 		// differently, left to the pilot
+	}
+
+	foregroundElevated() {
+		return false
+	}
+
+	async leaveElevated(): Promise<LeaveElevatedResult> {
+		return 'not-elevated'
 	}
 
 	cursor(): OsPoint | null {

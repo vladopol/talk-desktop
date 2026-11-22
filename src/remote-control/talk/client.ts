@@ -294,6 +294,17 @@ export class Client {
 	}
 
 	/**
+	 * Ask the presenter's Talk to get an elevated window out of the way: input does not reach it,
+	 * Alt+Tab included, so the controller cannot switch away from it alone
+	 */
+	leaveElevated() {
+		const session = this.activeSession()
+		if (session) {
+			this.channel.send(session.presenter, { op: 'esc', sid: session.sid })
+		}
+	}
+
+	/**
 	 * Send the local clipboard to the presenter, for pasting through a context menu
 	 */
 	async sendLocalClipboard() {

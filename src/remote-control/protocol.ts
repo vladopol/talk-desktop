@@ -16,7 +16,7 @@ export const RC_VERSION = 1
 export type RcOs = 'win' | 'mac' | 'linux'
 export type RcSourceKind = 'desktop' | 'screen' | 'window'
 export type RcStateName = 'active' | 'paused' | 'blocked'
-export type RcStateReason = 'local-input' | 'window-hidden' | 'window-occluded' | 'focus-elsewhere' | 'hb-lost' | 'own-window' | 'outside' | 'resizing'
+export type RcStateReason = 'local-input' | 'window-hidden' | 'window-occluded' | 'focus-elsewhere' | 'hb-lost' | 'own-window' | 'outside' | 'resizing' | 'elevated' | 'elevated-failed'
 export type RcDeclineReason = 'user' | 'timeout' | 'busy' | 'disabled' | 'unavailable'
 export type RcRevokeReason = 'user' | 'share-ended' | 'left-call' | 'hb-lost' | 'flood' | 'lock-screen' | 'suspend' | 'renderer-gone' | 'window-closed' | 'error' | 'disabled'
 
@@ -34,16 +34,18 @@ export type RcBtn = Base<'btn'> & { sid: string, b: number, d: boolean, x: numbe
 export type RcWheel = Base<'wheel'> & { sid: string, dx: number, dy: number, x: number, y: number }
 export type RcKey = Base<'key'> & { sid: string, code: string, d: boolean }
 export type RcRel = Base<'rel'> & { sid: string }
+/** Leave an elevated window that input cannot reach: raise an ordinary one or minimise it */
+export type RcEsc = Base<'esc'> & { sid: string }
 export type RcClip = Base<'clip'> & { sid: string, cid: number, i: number, n: number, data: string }
 export type RcHb = Base<'hb'> & { sid: string }
 export type RcState = Base<'state'> & { sid: string, s: RcStateName, why?: RcStateReason }
 export type RcRevoke = Base<'revoke'> & { sid: string, why: RcRevokeReason }
 
-export type RcMessage = RcHello | RcCap | RcRequest | RcAccept | RcDecline | RcFrame | RcPtr | RcBtn | RcWheel | RcKey | RcRel | RcClip | RcHb | RcState | RcRevoke
+export type RcMessage = RcHello | RcCap | RcRequest | RcAccept | RcDecline | RcFrame | RcPtr | RcBtn | RcWheel | RcKey | RcRel | RcEsc | RcClip | RcHb | RcState | RcRevoke
 export type RcOp = RcMessage['op']
 
 /** Messages carrying input or session traffic from the controller to the presenter */
-export type RcInputMessage = RcFrame | RcPtr | RcBtn | RcWheel | RcKey | RcRel | RcClip | RcHb
+export type RcInputMessage = RcFrame | RcPtr | RcBtn | RcWheel | RcKey | RcRel | RcEsc | RcClip | RcHb
 
 /** A message without the envelope fields the sender fills in */
 export type RcPayload<M extends RcMessage = RcMessage> = M extends RcMessage ? Omit<M, 'type' | 'v' | 'seq' | 't'> : never
@@ -83,9 +85,9 @@ export const LIMITS = Object.freeze({
  */
 export const REVOKE_SHORTCUT = 'Control+Alt+Shift+Escape'
 
-const OPS: ReadonlySet<string> = new Set(['hello', 'cap', 'request', 'accept', 'decline', 'frame', 'ptr', 'btn', 'wheel', 'key', 'rel', 'clip', 'hb', 'state', 'revoke'])
+const OPS: ReadonlySet<string> = new Set(['hello', 'cap', 'request', 'accept', 'decline', 'frame', 'ptr', 'btn', 'wheel', 'key', 'rel', 'esc', 'clip', 'hb', 'state', 'revoke'])
 const SID_RE = /^[A-Za-z0-9_-]{22}$/
-const STATE_REASONS: ReadonlySet<string> = new Set(['local-input', 'window-hidden', 'window-occluded', 'focus-elsewhere', 'hb-lost', 'own-window', 'outside', 'resizing'])
+const STATE_REASONS: ReadonlySet<string> = new Set(['local-input', 'window-hidden', 'window-occluded', 'focus-elsewhere', 'hb-lost', 'own-window', 'outside', 'resizing', 'elevated', 'elevated-failed'])
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
@@ -152,8 +154,9 @@ export function parseRcMessage(raw: unknown): RcMessage | null {
 		case 'key':
 			return isAllowedKey(raw.code) && typeof raw.d === 'boolean' ? raw as RcKey : null
 		case 'rel':
+		case 'esc':
 		case 'hb':
-			return raw as RcRel | RcHb
+			return raw as RcRel | RcEsc | RcHb
 		case 'clip':
 			return isInt(raw.cid, 0, Number.MAX_SAFE_INTEGER) && isInt(raw.n, 1, LIMITS.CLIP_MAX_PARTS) && isInt(raw.i, 0, (raw.n as number) - 1)
 				&& typeof raw.data === 'string' && raw.data.length <= LIMITS.CLIP_PART_BYTES
