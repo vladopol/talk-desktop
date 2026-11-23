@@ -11,7 +11,7 @@
 import type { RcOs } from '../protocol.ts'
 import type { AttachOptions, Peer, SpreedParticipant } from './channel.ts'
 
-import { createApp, reactive } from 'vue'
+import { createApp, reactive, shallowRef } from 'vue'
 import { Channel } from './channel.ts'
 import { Client } from './client.ts'
 import { Host } from './host.ts'
@@ -178,6 +178,25 @@ async function attach(options: AttachOptions) {
 	}
 }
 
+/** The mount point in the call's top bar where the controller's toolbar goes, if there is one */
+const toolbarSlot = shallowRef<HTMLElement | null>(null)
+
+/**
+ * Offer the mount point in the call's top bar for the controller's toolbar: there it covers
+ * nothing of the shared screen. Without it the toolbar stays over the screen.
+ *
+ * @param element - The mount point
+ * @return Withdraw it
+ */
+function mountToolbarSlot(element: HTMLElement): () => void {
+	toolbarSlot.value = element
+	return () => {
+		if (toolbarSlot.value === element) {
+			toolbarSlot.value = null
+		}
+	}
+}
+
 /**
  * Mount the control layer over the big screen share of another participant
  *
@@ -201,6 +220,7 @@ function mountScreen(options: MountScreenOptions): () => void {
 			presenter: options.peerId,
 			video: options.video,
 			setControlled: options.setControlled,
+			toolbarSlot,
 		})
 		app.mount(element)
 	})
@@ -248,4 +268,5 @@ export const remoteControl = {
 	attach,
 	mountScreen,
 	mountCallButton,
+	mountToolbarSlot,
 }
