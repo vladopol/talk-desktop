@@ -922,7 +922,8 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-10` | + the button's tooltip in `<body>`, above the presenter's name | Superseded by rc-11 |
 | `build-rc-11` | + tooltips of all `title` attributes drawn by the page on macOS; the button uses `title` again | Windows and Linux in CI (run 44803460736), macOS job lost to runner capacity, dmg built locally; tested 2026-11-20, everything works, tooltips on macOS included |
 | `build-rc-12` | + elevated windows on Windows: refused with a reason, "Switch window" | Built in CI on all platforms (run 45068026142) |
-| `build-rc-13` | + no stuck modifiers after a layout switch; Ctrl+C/Ctrl+V of files on the presenter's machine; consent window: "Shared clipboard", login in a tooltip; the banner slides away from the controller's cursor | Current |
+| `build-rc-13` | + no stuck modifiers after a layout switch; Ctrl+C/Ctrl+V of files on the presenter's machine; consent window: "Shared clipboard", login in a tooltip; the banner slides away from the controller's cursor | Windows and Linux in CI (run 45175734911), macOS job lost to runner capacity, dmg built locally; tested 2026-11-23, everything works |
+| `build-rc-14` | + the controller's toolbar in the call's top bar, behind a tab on the frame without a top bar | Current |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
