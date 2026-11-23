@@ -21,6 +21,12 @@ const unsubscribe = window.TALK_DESKTOP.remoteControl.on('banner', (value: Banne
 })
 onBeforeUnmount(unsubscribe)
 
+// Slid up out of the controller's way while their cursor is near
+const away = ref(false)
+onBeforeUnmount(window.TALK_DESKTOP.remoteControl.on('bannerAway', (value: boolean) => {
+	away.value = value
+}))
+
 const text = computed(() => {
 	if (!state.value) {
 		return ''
@@ -86,7 +92,7 @@ function act(action: 'take-back' | 'bring-to-front') {
 </script>
 
 <template>
-	<AppWindow class="banner">
+	<AppWindow class="banner" :class="{ 'banner--away': away }">
 		<div ref="content" class="banner__content">
 			<span class="banner__text">{{ clipboardNote || text }}</span>
 			<NcButton
@@ -103,6 +109,14 @@ function act(action: 'take-back' | 'bring-to-front') {
 	</AppWindow>
 </template>
 
+<style>
+/* The window is transparent: only the banner itself is painted, also while it slides away */
+html,
+body {
+	background: transparent !important;
+}
+</style>
+
 <style scoped>
 .banner {
 	display: flex;
@@ -113,6 +127,19 @@ function act(action: 'take-back' | 'bring-to-front') {
 	color: var(--color-warning-text, #000);
 	border: 2px solid var(--color-error);
 	-webkit-app-region: drag;
+	/* Keep in sync with BANNER_SLIDE_DURATION */
+	transition: transform 200ms ease-in-out, opacity 200ms ease-in-out;
+}
+
+.banner--away {
+	transform: translateY(-100%);
+	opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.banner {
+		transition: none;
+	}
 }
 
 .banner__content {

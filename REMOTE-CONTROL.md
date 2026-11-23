@@ -753,7 +753,10 @@ globally by a Talk Desktop setting.
   "Allow" (enabled after 1 s). It takes the height of its content and declines on its own after 30 s.
 - During a session: the banner at the top of the screen under the cursor (`RemoteControlBanner.vue`)
   - "Controlled by Name (login)" or the reason of a pause, "Bring to front" in window mode, "Take
-  back". It takes the width of its content and can be dragged aside.
+  back". It takes the width of its content and can be dragged aside. When the controller's
+  cursor comes within 3 px of it, it slides up out of sight in 200 ms and is hidden, so that
+  what is under it can be clicked; once the cursor has stayed away for 0.6 s it slides back. It
+  comes back at once when the session pauses, for example when the presenter moves the mouse.
 - Settings → "Screen sharing": "Allow giving control of a shared screen" and "Shared clipboard
   (text) while controlled"; on macOS the description explains the Accessibility permission and
   its loss with every build.
