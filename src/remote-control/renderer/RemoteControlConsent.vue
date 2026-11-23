@@ -15,6 +15,7 @@ import AppWindow from '../../shared/components/AppWindow.vue'
 const params = new URLSearchParams(window.location.search)
 const name = params.get('name') ?? ''
 const login = params.get('login') ?? ''
+const loginId = 'consent-login'
 const what = params.get('what')
 const title = params.get('title') ?? ''
 const clipboardAvailable = params.get('clipboard') === 'true'
@@ -91,8 +92,9 @@ function onKeyDown(event: KeyboardEvent) {
 						{{ t('talk_desktop', 'Request to control your computer') }}
 					</h2>
 					<div class="consent__who">
-						<strong>{{ name }}</strong>
-						<span class="consent__login">({{ login }})</span>
+						<!-- The login is set by the server, the name by the user: it tells a renamed impostor apart -->
+						<strong class="consent__name" tabindex="0" :aria-describedby="loginId">{{ name }}</strong>
+						<span :id="loginId" class="consent__login" role="tooltip">{{ login }}</span>
 					</div>
 				</div>
 			</div>
@@ -113,7 +115,7 @@ function onKeyDown(event: KeyboardEvent) {
 			</NcNoteCard>
 
 			<NcCheckboxRadioSwitch v-if="clipboardAvailable" v-model="clipboard" class="consent__clipboard">
-				{{ t('talk_desktop', 'Shared clipboard (text)') }}
+				{{ t('talk_desktop', 'Shared clipboard') }}
 			</NcCheckboxRadioSwitch>
 
 			<div class="consent__actions">
@@ -183,11 +185,33 @@ function onKeyDown(event: KeyboardEvent) {
 	flex-wrap: wrap;
 	align-items: baseline;
 	gap: var(--default-grid-baseline);
+	position: relative;
 	overflow-wrap: anywhere;
 }
 
+.consent__name {
+	cursor: default;
+	border-radius: var(--border-radius-small);
+}
+
 .consent__login {
+	position: absolute;
+	inset-block-start: 100%;
+	inset-inline-start: 0;
+	z-index: 1;
+	padding: calc(var(--default-grid-baseline) * 1) calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-small);
+	background-color: var(--color-main-background);
+	box-shadow: 0 0 6px var(--color-box-shadow);
 	color: var(--color-text-maxcontrast);
+	font-size: var(--font-size-small, 13px);
+	white-space: nowrap;
+	visibility: hidden;
+}
+
+.consent__name:hover + .consent__login,
+.consent__name:focus-visible + .consent__login {
+	visibility: visible;
 }
 
 .consent__text {

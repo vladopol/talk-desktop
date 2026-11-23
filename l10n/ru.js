@@ -182,7 +182,7 @@ OC.L10N.register(
     "Paused: the shared window is hidden · {name}" : "Пауза: демонстрируемое окно скрыто · {name}",
     "Request control" : "Запросить управление",
     "Send your clipboard to the presenter, to paste it through a menu" : "Передать ваш буфер обмена демонстрирующему, чтобы вставить через меню",
-    "Shared clipboard (text)" : "Общий буфер обмена (текст)",
+    "Shared clipboard" : "Общий буфер обмена",
     "Stop control" : "Завершить управление",
     "Take back" : "Забрать управление",
     "Talk windows on the presenter's screen cannot be controlled" : "Окнами Talk на экране демонстрирующего управлять нельзя",
