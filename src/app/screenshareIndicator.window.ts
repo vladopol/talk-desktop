@@ -29,10 +29,17 @@ const ENTIRE_DESKTOP_SOURCE_ID = 'entire-desktop:0:0'
 /** SetWindowDisplayAffinity: shown on the monitor only, left out of every capture (Windows 10 2004+) */
 const WDA_EXCLUDEFROMCAPTURE = 0x11
 
+const GWL_EXSTYLE = -20
+const WS_EX_TRANSPARENT = 0x20
+const WS_EX_LAYERED = 0x80000
+
 type AffinityApi = {
 	GetWindowDisplayAffinity: (hwnd: number, affinity: Uint32Array) => boolean
 	SetWindowDisplayAffinity: (hwnd: number, affinity: number) => boolean
 	GetWindowLongPtrW: (hwnd: number, index: number) => number | bigint
+	SetWindowLongPtrW: (hwnd: number, index: number, value: number) => number | bigint
+	SetWindowRgn: (hwnd: number, region: number, redraw: boolean) => number
+	GetLastError: () => number
 }
 
 let affinityApi: AffinityApi | null | undefined
@@ -49,10 +56,14 @@ function getAffinityApi(): AffinityApi | null {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports -- koffi is a native module kept external from the bundle
 		const koffi = require('koffi') as typeof Koffi
 		const user32 = koffi.load('user32.dll')
+		const kernel32 = koffi.load('kernel32.dll')
 		affinityApi = {
 			GetWindowDisplayAffinity: user32.func('bool __stdcall GetWindowDisplayAffinity(uintptr_t hwnd, _Out_ uint32_t *affinity)'),
 			SetWindowDisplayAffinity: user32.func('bool __stdcall SetWindowDisplayAffinity(uintptr_t hwnd, uint32_t affinity)'),
 			GetWindowLongPtrW: user32.func('intptr_t __stdcall GetWindowLongPtrW(uintptr_t hwnd, int index)'),
+			SetWindowLongPtrW: user32.func('intptr_t __stdcall SetWindowLongPtrW(uintptr_t hwnd, int index, intptr_t value)'),
+			SetWindowRgn: user32.func('int __stdcall SetWindowRgn(uintptr_t hwnd, uintptr_t region, bool redraw)'),
+			GetLastError: kernel32.func('uint32_t __stdcall GetLastError()'),
 		}
 	} catch (error) {
 		console.error('[screenshare-indicator] Failed to bind user32:', error)
@@ -61,8 +72,10 @@ function getAffinityApi(): AffinityApi | null {
 }
 
 /**
- * On Windows, make sure the strip is left out of the capture, and log what Windows says: the
- * viewers saw the border although setContentProtection had been called
+ * On Windows, make sure the strip is left out of the capture, and log what Windows says.
+ * Windows refused WDA_EXCLUDEFROMCAPTURE for the strips (build-rc-16) while it accepts it for
+ * Talk's main window. This tries it without the layered click-through style, then also without
+ * the window region, and puts the click-through back. Every step goes to remote-control.log.
  *
  * @param window - A border strip, shown
  */
@@ -76,18 +89,34 @@ function ensureExcludedFromCapture(window: BrowserWindow) {
 		const affinity = new Uint32Array(1)
 		return api.GetWindowDisplayAffinity(hwnd, affinity) ? affinity[0] : null
 	}
+	const exStyle = () => Number(api.GetWindowLongPtrW(hwnd, GWL_EXSTYLE))
+	const steps: Record<string, unknown>[] = []
+	const attempt = (step: string) => {
+		const ok = api.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
+		const error = ok ? 0 : api.GetLastError()
+		const after = read()
+		steps.push({ step, ok, error, after, exStyle: exStyle().toString(16) })
+		return after === WDA_EXCLUDEFROMCAPTURE
+	}
+
 	const before = read()
-	let set: boolean | null = null
-	if (before !== WDA_EXCLUDEFROMCAPTURE) {
-		set = api.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
+	const style = exStyle()
+	if (before !== WDA_EXCLUDEFROMCAPTURE && !attempt('as-is')) {
+		api.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT))
+		if (!attempt('not-layered')) {
+			api.SetWindowRgn(hwnd, 0, true)
+			attempt('not-layered-no-region')
+		}
+		// Clicks have to go through the border again
+		window.setIgnoreMouseEvents(true)
+		steps.push({ step: 'click-through-back', after: read(), exStyle: exStyle().toString(16) })
 	}
 	rcLog('indicator-affinity', {
 		before,
-		set,
-		after: read(),
+		exStyle: style.toString(16),
 		contentProtected: window.isContentProtected(),
-		// GWL_EXSTYLE: WS_EX_LAYERED 0x80000, WS_EX_TRANSPARENT 0x20, WS_EX_TOOLWINDOW 0x80
-		exStyle: Number(api.GetWindowLongPtrW(hwnd, -20)).toString(16),
+		excluded: read() === WDA_EXCLUDEFROMCAPTURE,
+		steps,
 	})
 }
 
