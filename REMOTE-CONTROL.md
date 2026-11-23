@@ -872,7 +872,8 @@ spreed (`.overrides/spreed`, `build/custom` on v25.0.8):
 
 ## Implementation status
 
-On branch `feat/remote-control` of both forks (2026-11-20). First live session between a
+In `build/custom` of both forks since `build-25` (2026-11-23), developed and tested on
+`feat/remote-control` (from 2026-11-20). First live session between a
 Windows presenter and a macOS controller on 2026-11-20, see [Testing log](#testing-log).
 
 | Part of the plan | State |
@@ -895,11 +896,12 @@ Windows presenter and a macOS controller on 2026-11-20, see [Testing log](#testi
 
 ## Test builds and debugging
 
-**Branches.** The prototype lives on `feat/remote-control` in both forks, `build/custom` and the
-`build-N` numbering are untouched. On the talk-desktop branch the last commit,
-`ci: build the remote control test branch with its spreed branch`, makes the workflow bundle
-spreed from `feat/remote-control` instead of `build/custom` (`SPREED_REF`). **Drop that commit when
-the branch is merged into `build/custom`.**
+**Branches.** The prototype was developed on `feat/remote-control` in both forks and tested as
+`build-rc-N`, leaving `build/custom` and the `build-N` numbering untouched. On the talk-desktop
+branch the commit `ci: build the remote control test branch with its spreed branch` made the
+workflow bundle spreed from `feat/remote-control` instead of `build/custom` (`SPREED_REF`); it was
+dropped when the branch went into `build/custom` for `build-25`. Further test builds of the
+feature branch need such a commit again.
 
 **Test builds** are started by `build-rc-N` tags, so they never collide with release builds:
 
@@ -923,7 +925,7 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-11` | + tooltips of all `title` attributes drawn by the page on macOS; the button uses `title` again | Windows and Linux in CI (run 44803460736), macOS job lost to runner capacity, dmg built locally; tested 2026-11-20, everything works, tooltips on macOS included |
 | `build-rc-12` | + elevated windows on Windows: refused with a reason, "Switch window" | Built in CI on all platforms (run 45068026142) |
 | `build-rc-13` | + no stuck modifiers after a layout switch; Ctrl+C/Ctrl+V of files on the presenter's machine; consent window: "Shared clipboard", login in a tooltip; the banner slides away from the controller's cursor | Windows and Linux in CI (run 45175734911), macOS job lost to runner capacity, dmg built locally; tested 2026-11-23, everything works |
-| `build-rc-14` | + the controller's toolbar in the call's top bar, behind a tab on the frame without a top bar | Current |
+| `build-rc-14` | + the controller's toolbar in the call's top bar, behind a tab on the frame without a top bar | Windows and Linux in CI (run 45186104434), macOS job lost to runner capacity, dmg built locally; tested 2026-11-23, everything works; went into `build/custom` as `build-25` |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
