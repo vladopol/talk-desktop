@@ -783,7 +783,15 @@ globally by a Talk Desktop setting.
   - an outline around the video (orange; red while the layer has the keyboard focus) and a
     toolbar: "Stop control", "Send clipboard", "Use Cmd as Ctrl" / "Use Ctrl as Cmd" (when the OSes
     differ), state hints. Keys are captured only while the layer has the focus ("Click on the
-    screen to type"), so the chat next to the call stays usable;
+    screen to type"), so the chat next to the call stays usable. The toolbar sits in the call's
+    top bar, between the conversation name and the call time, so that it covers nothing of the
+    shared screen: spreed's `TopBar.vue` offers a mount point through `mountToolbarSlot`, and the
+    layer moves the toolbar there with `<Teleport>`. Without a top bar (a full-screen call) a small
+    tab hangs from the top edge of the shown frame instead, 10 % of its width from its right edge
+    (the middle is the presenter's banner, the corner the window buttons; the frame, not the
+    letterboxed element): a click pins the toolbar open below it,
+    another click hides it again. While hidden, the tab shows a red dot during a session and turns
+    the warning colour, with the hint as its tooltip, when there is a state hint;
   - in window mode a permanent hint that menus and dialogs are not visible;
 - while `paused`/`blocked`: a hint with the reason, nothing is sent. A refused click keeps its
   reason on screen for at least 3 s.

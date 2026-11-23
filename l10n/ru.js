@@ -184,6 +184,8 @@ OC.L10N.register(
     "Send your clipboard to the presenter, to paste it through a menu" : "Передать ваш буфер обмена демонстрирующему, чтобы вставить через меню",
     "Shared clipboard" : "Общий буфер обмена",
     "Stop control" : "Завершить управление",
+    "Show remote control" : "Показать панель управления",
+    "Hide remote control" : "Скрыть панель управления",
     "Take back" : "Забрать управление",
     "Talk windows on the presenter's screen cannot be controlled" : "Окнами Talk на экране демонстрирующего управлять нельзя",
     "The presenter declined or ended the control" : "Запрос отклонён, или управление завершено",
