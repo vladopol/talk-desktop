@@ -4,8 +4,10 @@
  */
 
 import type { Display, Rectangle, WebContents } from 'electron'
+import type * as Koffi from 'koffi'
 
 import { BrowserWindow, desktopCapturer, screen } from 'electron'
+import { rcLog } from '../remote-control/log.main.ts'
 import { isMac, isWindows } from './system.utils.ts'
 
 /**
@@ -23,6 +25,71 @@ const BORDER_COLOR = '#ffd500'
  * The custom sourceId for capturing all the screens at once, see the screensharing dialog.
  */
 const ENTIRE_DESKTOP_SOURCE_ID = 'entire-desktop:0:0'
+
+/** SetWindowDisplayAffinity: shown on the monitor only, left out of every capture (Windows 10 2004+) */
+const WDA_EXCLUDEFROMCAPTURE = 0x11
+
+type AffinityApi = {
+	GetWindowDisplayAffinity: (hwnd: number, affinity: Uint32Array) => boolean
+	SetWindowDisplayAffinity: (hwnd: number, affinity: number) => boolean
+	GetWindowLongPtrW: (hwnd: number, index: number) => number | bigint
+}
+
+let affinityApi: AffinityApi | null | undefined
+
+/**
+ * Bind the window display affinity functions of user32, Windows only
+ */
+function getAffinityApi(): AffinityApi | null {
+	if (affinityApi !== undefined) {
+		return affinityApi
+	}
+	affinityApi = null
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- koffi is a native module kept external from the bundle
+		const koffi = require('koffi') as typeof Koffi
+		const user32 = koffi.load('user32.dll')
+		affinityApi = {
+			GetWindowDisplayAffinity: user32.func('bool __stdcall GetWindowDisplayAffinity(uintptr_t hwnd, _Out_ uint32_t *affinity)'),
+			SetWindowDisplayAffinity: user32.func('bool __stdcall SetWindowDisplayAffinity(uintptr_t hwnd, uint32_t affinity)'),
+			GetWindowLongPtrW: user32.func('intptr_t __stdcall GetWindowLongPtrW(uintptr_t hwnd, int index)'),
+		}
+	} catch (error) {
+		console.error('[screenshare-indicator] Failed to bind user32:', error)
+	}
+	return affinityApi
+}
+
+/**
+ * On Windows, make sure the strip is left out of the capture, and log what Windows says: the
+ * viewers saw the border although setContentProtection had been called
+ *
+ * @param window - A border strip, shown
+ */
+function ensureExcludedFromCapture(window: BrowserWindow) {
+	const api = isWindows ? getAffinityApi() : null
+	if (!api || window.isDestroyed()) {
+		return
+	}
+	const hwnd = Number(window.getNativeWindowHandle().readBigUInt64LE())
+	const read = () => {
+		const affinity = new Uint32Array(1)
+		return api.GetWindowDisplayAffinity(hwnd, affinity) ? affinity[0] : null
+	}
+	const before = read()
+	let set: boolean | null = null
+	if (before !== WDA_EXCLUDEFROMCAPTURE) {
+		set = api.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
+	}
+	rcLog('indicator-affinity', {
+		before,
+		set,
+		after: read(),
+		contentProtected: window.isContentProtected(),
+		// GWL_EXSTYLE: WS_EX_LAYERED 0x80000, WS_EX_TRANSPARENT 0x20, WS_EX_TOOLWINDOW 0x80
+		exStyle: Number(api.GetWindowLongPtrW(hwnd, -20)).toString(16),
+	})
+}
 
 /**
  * Windows currently painting the border, four (one per screen edge) per indicated display.
@@ -111,23 +178,27 @@ function createIndicatorWindow(bounds: Rectangle): BrowserWindow {
 	})
 
 	window.removeMenu()
+	// Only for the presenter: kept out of the capture, so the viewers do not see it. Windows 10
+	// 2004+ leaves it out (WDA_EXCLUDEFROMCAPTURE), older Windows captures it black. Set before
+	// the window becomes layered for the click-through. macOS honours it only for captures that
+	// do not use ScreenCaptureKit, which Chromium does use: there it stays visible, as on Linux.
+	window.setContentProtection(true)
 	// Should the OS still enforce a minimum size, only the requested strip is painted
 	if (!isMac) {
 		window.setShape([{ x: 0, y: 0, width: bounds.width, height: bounds.height }])
 	}
 	// The border is decoration only - every click has to reach whatever is below it
 	window.setIgnoreMouseEvents(true)
-	// Only for the presenter: kept out of the capture, so the viewers do not see it. Windows 10
-	// 2004+ leaves it out (WDA_EXCLUDEFROMCAPTURE), older Windows captures it black, macOS
-	// leaves it out of the capture as well; Linux has no such thing and still shows it.
-	window.setContentProtection(true)
 	// 'screen-saver' is the level that also floats above full-screen applications
 	window.setAlwaysOnTop(true, 'screen-saver')
 	window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 	// The window has no content: the background color is the border
 	window.loadURL('data:text/html;charset=utf-8,')
 	// showInactive to never steal the focus from whatever the user is presenting
-	window.once('ready-to-show', () => window.showInactive())
+	window.once('ready-to-show', () => {
+		window.showInactive()
+		ensureExcludedFromCapture(window)
+	})
 
 	return window
 }
