@@ -117,6 +117,10 @@ function createIndicatorWindow(bounds: Rectangle): BrowserWindow {
 	}
 	// The border is decoration only - every click has to reach whatever is below it
 	window.setIgnoreMouseEvents(true)
+	// Only for the presenter: kept out of the capture, so the viewers do not see it. Windows 10
+	// 2004+ leaves it out (WDA_EXCLUDEFROMCAPTURE), older Windows captures it black, macOS
+	// leaves it out of the capture as well; Linux has no such thing and still shows it.
+	window.setContentProtection(true)
 	// 'screen-saver' is the level that also floats above full-screen applications
 	window.setAlwaysOnTop(true, 'screen-saver')
 	window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })

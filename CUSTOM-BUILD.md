@@ -53,8 +53,10 @@ went into `build/custom` with `build-25`. Design, protocol, testing log and debu
   strips need `enableLargerThanScreen: true`, or they are pushed into the work area; on Windows
   `thickFrame: false` and a `setShape` clip, or the caption minimum height makes the top strip
   30-40 px thick. Start and end of a share are seen by wrapping `getUserMedia`; the live previews
-  of the picker opt out through `getUserMediaWithoutIndicator()`. Remote control extends it with
-  its banner.
+  of the picker opt out through `getUserMediaWithoutIndicator()`. The strips are kept out of the
+  capture with `setContentProtection(true)`, so only the presenter sees them: left out on
+  Windows 10 2004+ and macOS, black on older Windows, still captured on Linux, where Electron has
+  no such thing. Remote control extends it with its banner.
 - **Remote control (8)** is self-contained in `src/remote-control/` on the desktop side; outside
   it there are only hooks in `main.js`, `preload.js`, the settings section, the Talk renderer
   entry and `forge.config.js` (`koffi`). spreed carries a small connector **without strings**:
