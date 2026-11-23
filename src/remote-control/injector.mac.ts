@@ -4,13 +4,14 @@
  */
 
 import type * as Koffi from 'koffi'
-import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
+import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, ModifierState, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
 
 import { clipboard, screen, systemPreferences } from 'electron'
 
 // See REMOTE-CONTROL.md, "Injecting input into the OS" - "macOS"
 const kCGEventSourceStatePrivate = -1
+const kCGEventSourceStateHIDSystemState = 1
 const kCGHIDEventTap = 0
 const kCGEventLeftMouseDown = 1
 const kCGEventLeftMouseUp = 2
@@ -84,6 +85,7 @@ type Bindings = {
 	CGEventPost: (tap: number, event: Pointer) => void
 	CGPreflightPostEventAccess: () => boolean
 	CGRequestPostEventAccess: () => boolean
+	CGEventSourceFlagsState: (state: number) => number | bigint
 }
 
 type WindowInfo = { id: number, pid: number, layer: number, bounds: OsRect, onscreen: boolean, alpha: number }
@@ -149,6 +151,7 @@ function getBindings(): Bindings | null {
 			CGEventPost: cg.func('void CGEventPost(uint32_t tap, void *event)'),
 			CGPreflightPostEventAccess: cg.func('bool CGPreflightPostEventAccess()'),
 			CGRequestPostEventAccess: cg.func('bool CGRequestPostEventAccess()'),
+			CGEventSourceFlagsState: cg.func('uint64_t CGEventSourceFlagsState(int32_t state)'),
 		}
 	} catch (error) {
 		console.error('[remote-control] Failed to load the macOS input bindings:', error)
@@ -290,6 +293,20 @@ export class MacInjector implements Injector {
 		const point = native.CGEventGetLocation(event)
 		native.CFRelease(event)
 		return { x: point.x, y: point.y }
+	}
+
+	modifiers(): ModifierState | null {
+		const native = getBindings()
+		if (!native) {
+			return null
+		}
+		const flags = Number(native.CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState))
+		return {
+			Control: (flags & FLAG_CONTROL) !== 0,
+			Alt: (flags & FLAG_ALTERNATE) !== 0,
+			Shift: (flags & FLAG_SHIFT) !== 0,
+			Meta: (flags & FLAG_COMMAND) !== 0,
+		}
 	}
 
 	move(point: OsPoint) {

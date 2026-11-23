@@ -5,7 +5,7 @@
 
 import type { Rectangle } from 'electron'
 import type * as Koffi from 'koffi'
-import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
+import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, ModifierState, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
 
 import { clipboard, screen } from 'electron'
@@ -20,6 +20,10 @@ const XA_WINDOW = 33
 const XA_CARDINAL = 6
 const ANY_PROPERTY_TYPE = 0
 const EVDEV_TO_X11_KEYCODE = 8
+const ShiftMask = 1
+const ControlMask = 4
+const Mod1Mask = 8
+const Mod4Mask = 64
 /** X11 buttons: 1 left, 2 middle, 3 right, 8 back, 9 forward */
 const X11_BUTTONS = [1, 2, 3, 8, 9]
 const WHEEL_UP = 4
@@ -260,6 +264,24 @@ export class LinuxInjector implements Injector {
 		const y = new Int32Array(1)
 		const ok = native.XQueryPointer(native.display, native.root, new BigUint64Array(1), new BigUint64Array(1), x, y, new Int32Array(1), new Int32Array(1), new Uint32Array(1))
 		return ok ? { x: x[0]!, y: y[0]! } : null
+	}
+
+	modifiers(): ModifierState | null {
+		const native = getBindings()
+		if (!native) {
+			return null
+		}
+		const mask = new Uint32Array(1)
+		const ok = native.XQueryPointer(native.display, native.root, new BigUint64Array(1), new BigUint64Array(1), new Int32Array(1), new Int32Array(1), new Int32Array(1), new Int32Array(1), mask)
+		if (!ok) {
+			return null
+		}
+		return {
+			Control: (mask[0]! & ControlMask) !== 0,
+			Alt: (mask[0]! & Mod1Mask) !== 0,
+			Shift: (mask[0]! & ShiftMask) !== 0,
+			Meta: (mask[0]! & Mod4Mask) !== 0,
+		}
 	}
 
 	move(point: OsPoint) {

@@ -553,6 +553,15 @@ pause, lost heartbeat, `rel`, leaving the call, end of the share, closed window,
 injector, `before-quit`) `releaseAll()` sends key-up and button-up for everything remembered.
 Otherwise Ctrl or a mouse button stays stuck down on the presenter's machine.
 
+**A key-up the controller's OS swallows** (since `build-rc-13`). When Ctrl+Shift, Alt+Shift or
+Ctrl+Alt switches the keyboard layout on a Windows controller, the window sometimes gets no
+key-up for one of the modifiers. The presenter then kept Ctrl down, and every letter became a
+shortcut: nothing was typed any more. The controller's main now checks the modifiers it sent as
+held against the OS (`Injector.modifiers()`: `GetAsyncKeyState`, `CGEventSourceFlagsState`, the
+X11 pointer mask) before every key and every 200 ms, and sends the release of any the OS no
+longer holds. The OS is asked, not the flags of the event: Chromium drops Ctrl and Alt from the
+flags of AltGr.
+
 ## Sharing a window
 
 A window is harder than a screen: a screen is entirely in the frame, a window only shows itself,

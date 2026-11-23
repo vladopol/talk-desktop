@@ -4,13 +4,18 @@
  */
 
 import type * as Koffi from 'koffi'
-import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
+import type { ControlledSource, HitResult, Injector, KeyTargetResult, LeaveElevatedResult, ModifierState, MouseButton, OsPoint, OsRect, WindowStateResult } from './injector.types.ts'
 import type { NativeKey } from './keymap.ts'
 
 import { screen } from 'electron'
 import { performance } from 'node:perf_hooks'
 
 // See REMOTE-CONTROL.md, "Injecting input into the OS" - "Windows"
+const VK_SHIFT = 0x10
+const VK_CONTROL = 0x11
+const VK_MENU = 0x12
+const VK_LWIN = 0x5b
+const VK_RWIN = 0x5c
 const INPUT_MOUSE = 0
 const INPUT_KEYBOARD = 1
 const MOUSEEVENTF_MOVE = 0x0001
@@ -95,6 +100,7 @@ type Bindings = {
 	ShowWindow: (hwnd: number, cmd: number) => boolean
 	SetForegroundWindow: (hwnd: number) => boolean
 	GetCursorPos: (point: Record<string, number>) => boolean
+	GetAsyncKeyState: (vk: number) => number
 	IsWindowVisible: (hwnd: number) => boolean
 	ShowWindowAsync: (hwnd: number, cmd: number) => boolean
 	SwitchToThisWindow: (hwnd: number, altTab: boolean) => void
@@ -156,6 +162,7 @@ function getBindings(): Bindings | null {
 			ShowWindow: user32.func('bool __stdcall ShowWindow(uintptr_t hwnd, int cmd)'),
 			SetForegroundWindow: user32.func('bool __stdcall SetForegroundWindow(uintptr_t hwnd)'),
 			GetCursorPos: user32.func('bool __stdcall GetCursorPos(_Out_ RC_POINT *point)'),
+			GetAsyncKeyState: user32.func('short __stdcall GetAsyncKeyState(int vk)'),
 			IsWindowVisible: user32.func('bool __stdcall IsWindowVisible(uintptr_t hwnd)'),
 			ShowWindowAsync: user32.func('bool __stdcall ShowWindowAsync(uintptr_t hwnd, int cmd)'),
 			SwitchToThisWindow: user32.func('void __stdcall SwitchToThisWindow(uintptr_t hwnd, bool altTab)'),
@@ -367,6 +374,20 @@ export class WindowsInjector implements Injector {
 		const native = getBindings()
 		const point = { x: 0, y: 0 }
 		return native && native.GetCursorPos(point) ? point : null
+	}
+
+	modifiers(): ModifierState | null {
+		const native = getBindings()
+		if (!native) {
+			return null
+		}
+		const held = (vk: number) => (native.GetAsyncKeyState(vk) & 0x8000) !== 0
+		return {
+			Control: held(VK_CONTROL),
+			Alt: held(VK_MENU),
+			Shift: held(VK_SHIFT),
+			Meta: held(VK_LWIN) || held(VK_RWIN),
+		}
 	}
 
 	move(point: OsPoint) {
