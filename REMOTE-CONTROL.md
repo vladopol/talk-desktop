@@ -627,7 +627,7 @@ while on the real screen anything may lie on top of it.
 v1: plain text (`text/plain`) only, both directions, at most 256 KB per copy (configurable).
 Text is split into parts of 16 KiB of UTF-8: HPB accepts at most 64 KiB per message including the
 JSON envelope, and Cyrillic plus JSON escaping inflate text. No images, HTML/RTF or files.
-Enabled by a "Shared clipboard (text)" checkbox in the consent window, checked by default, and
+Enabled by a "Shared clipboard" checkbox in the consent window, checked by default, and
 globally by a Talk Desktop setting.
 
 **Controller → presenter (paste):**
@@ -687,8 +687,9 @@ globally by a Talk Desktop setting.
   Ivanov (ivanov)? [Give] [Cancel]". An XSS in the renderer therefore cannot grant control without
   a click.
 - **The consent window** shows:
-  - the display name and the **login** from `fromUserId`, not just the display name, which users
-    set for themselves;
+  - the display name, and the **login** from `fromUserId` in a tooltip on the name (on hover or
+    keyboard focus): users set the display name for themselves, the login tells a renamed
+    impostor apart;
   - what will be controlled ("Screen 2", "Window: Contract.docx — Word");
   - the clipboard checkbox.
 
@@ -746,7 +747,7 @@ globally by a Talk Desktop setting.
 - *Planned, not in the prototype:* "Give control…" in the screen-share menu and the participant
   menu, listing the Nextcloud users in the call who sent `hello` with the `ctl` role.
 - An incoming request opens main's consent window (`RemoteControlConsent.vue`): an icon, "Request
-  to control your computer", the display name and the login, one sentence saying what will be
+  to control your computer", the display name with the login in its tooltip, one sentence saying what will be
   controlled (the shared screen, all screens, or the window "…"), the revoke shortcut, note cards
   for a taken shortcut and for window mode, the clipboard checkbox, then "Decline" (focused) and
   "Allow" (enabled after 1 s). It takes the height of its content and declines on its own after 30 s.
