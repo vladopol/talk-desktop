@@ -642,6 +642,11 @@ globally by a Talk Desktop setting.
   is strict (WebSocket → one IPC queue → main), so the key after `clip` pastes the new text. An
   incomplete transfer (parts missing for 2 s) is dropped.
 - Line endings are converted to the presenter's OS (CRLF on Windows); NUL characters are removed.
+- Only a text the controller has copied since is sent: the controller's renderer keeps, per
+  session, the text both sides already have (sent on a paste or received on a copy). Before
+  `build-rc-13` every paste shortcut sent it again and replaced what the presenter had copied on
+  their own machine: files copied with Ctrl+C in Explorer or Finder could not be pasted with
+  Ctrl+V, only from the context menu.
 - The presenter's previous clipboard content is lost and not restored, as in TeamViewer. On
   Windows the pasted text also ends up in the clipboard history (Win+V), a known limitation.
 

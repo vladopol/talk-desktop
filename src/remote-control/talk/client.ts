@@ -35,6 +35,8 @@ type Session = {
 	lastFromPresenter: number
 	incoming: { cid: number, parts: string[], received: number, timer: number } | null
 	clipboardId: number
+	/** The clipboard text both sides already have, normalised: sent on a paste or received on a copy */
+	sharedClipboard: string | null
 	/** What the layer showed before the heartbeats were lost: the presenter does not repeat it */
 	beforeLost: Pick<ControlState, 'status' | 'why'> | null
 }
@@ -375,10 +377,17 @@ export class Client {
 		if (!session || !this.state(session.presenter).clipboard || !text) {
 			return
 		}
+		// Only a text the controller copied since: otherwise every paste shortcut would replace
+		// what the presenter copied on their own computer, files included, with an old text
+		const normalized = normalizeClipboardText(text)
+		if (normalized === session.sharedClipboard) {
+			return
+		}
 		const parts = splitClipboardText(text)
 		if (!parts) {
 			return
 		}
+		session.sharedClipboard = normalized
 		const cid = ++session.clipboardId
 		parts.forEach((data, i) => this.channel.send(session.presenter, { op: 'clip', sid: session.sid, cid, i, n: parts.length, data }))
 	}
@@ -396,7 +405,7 @@ export class Client {
 	private start(presenter: string, message: Extract<RcMessage, { op: 'accept' }>) {
 		const state = this.state(presenter)
 		this.clearRequestTimer()
-		this.session = { presenter, sid: message.sid, lastFromPresenter: performance.now(), incoming: null, clipboardId: 0, beforeLost: null }
+		this.session = { presenter, sid: message.sid, lastFromPresenter: performance.now(), incoming: null, clipboardId: 0, sharedClipboard: null, beforeLost: null }
 		this.updateBusy()
 		Object.assign(state, { status: 'active', why: null, src: message.src, os: message.os, clipboard: message.clip, clipboardIn: null })
 		this.wasConnected = this.channel.connected
@@ -541,6 +550,7 @@ export class Client {
 		window.clearTimeout(incoming.timer)
 		session.incoming = null
 		const text = incoming.parts.join('')
+		session.sharedClipboard = normalizeClipboardText(text)
 		window.TALK_DESKTOP.remoteControl.writeClipboard(text)
 		const state = this.state(session.presenter)
 		state.clipboardIn = text.length
@@ -591,4 +601,13 @@ export class Client {
 		const os = this.state(presenter).os
 		return !!os && (os === 'mac') !== (this.ownOs === 'mac')
 	}
+}
+
+/**
+ * Clipboard text as compared between the two sides: they differ in line endings
+ *
+ * @param text - Clipboard text
+ */
+function normalizeClipboardText(text: string) {
+	return text.replaceAll('\0', '').replace(/\r\n|\r/g, '\n')
 }
