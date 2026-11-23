@@ -28,24 +28,21 @@ const ENTIRE_DESKTOP_SOURCE_ID = 'entire-desktop:0:0'
 
 /** SetWindowDisplayAffinity: shown on the monitor only, left out of every capture (Windows 10 2004+) */
 const WDA_EXCLUDEFROMCAPTURE = 0x11
-
 const GWL_EXSTYLE = -20
 const WS_EX_TRANSPARENT = 0x20
 const WS_EX_LAYERED = 0x80000
 
 type AffinityApi = {
-	GetWindowDisplayAffinity: (hwnd: number, affinity: Uint32Array) => boolean
 	SetWindowDisplayAffinity: (hwnd: number, affinity: number) => boolean
 	GetWindowLongPtrW: (hwnd: number, index: number) => number | bigint
 	SetWindowLongPtrW: (hwnd: number, index: number, value: number) => number | bigint
-	SetWindowRgn: (hwnd: number, region: number, redraw: boolean) => number
 	GetLastError: () => number
 }
 
 let affinityApi: AffinityApi | null | undefined
 
 /**
- * Bind the window display affinity functions of user32, Windows only
+ * Bind the user32 functions to set the display affinity, Windows only
  */
 function getAffinityApi(): AffinityApi | null {
 	if (affinityApi !== undefined) {
@@ -58,11 +55,9 @@ function getAffinityApi(): AffinityApi | null {
 		const user32 = koffi.load('user32.dll')
 		const kernel32 = koffi.load('kernel32.dll')
 		affinityApi = {
-			GetWindowDisplayAffinity: user32.func('bool __stdcall GetWindowDisplayAffinity(uintptr_t hwnd, _Out_ uint32_t *affinity)'),
 			SetWindowDisplayAffinity: user32.func('bool __stdcall SetWindowDisplayAffinity(uintptr_t hwnd, uint32_t affinity)'),
 			GetWindowLongPtrW: user32.func('intptr_t __stdcall GetWindowLongPtrW(uintptr_t hwnd, int index)'),
 			SetWindowLongPtrW: user32.func('intptr_t __stdcall SetWindowLongPtrW(uintptr_t hwnd, int index, intptr_t value)'),
-			SetWindowRgn: user32.func('int __stdcall SetWindowRgn(uintptr_t hwnd, uintptr_t region, bool redraw)'),
 			GetLastError: kernel32.func('uint32_t __stdcall GetLastError()'),
 		}
 	} catch (error) {
@@ -72,52 +67,25 @@ function getAffinityApi(): AffinityApi | null {
 }
 
 /**
- * On Windows, make sure the strip is left out of the capture, and log what Windows says.
- * Windows refused WDA_EXCLUDEFROMCAPTURE for the strips (build-rc-16) while it accepts it for
- * Talk's main window. This tries it without the layered click-through style, then also without
- * the window region, and puts the click-through back. Every step goes to remote-control.log.
+ * Leave a strip out of the capture on Windows. Windows refuses WDA_EXCLUDEFROMCAPTURE for a
+ * layered window (error 8, ERROR_NOT_ENOUGH_MEMORY), and the strips are layered for the
+ * click-through - so setContentProtection fails there silently and the viewers saw the border.
+ * Drop the layered style, set the affinity, then put the click-through back: the affinity stays.
  *
  * @param window - A border strip, shown
  */
-function ensureExcludedFromCapture(window: BrowserWindow) {
+function excludeFromCaptureOnWindows(window: BrowserWindow) {
 	const api = isWindows ? getAffinityApi() : null
 	if (!api || window.isDestroyed()) {
 		return
 	}
 	const hwnd = Number(window.getNativeWindowHandle().readBigUInt64LE())
-	const read = () => {
-		const affinity = new Uint32Array(1)
-		return api.GetWindowDisplayAffinity(hwnd, affinity) ? affinity[0] : null
+	const style = Number(api.GetWindowLongPtrW(hwnd, GWL_EXSTYLE))
+	api.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT))
+	if (!api.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)) {
+		rcLog('indicator-not-excluded', { error: api.GetLastError(), exStyle: style.toString(16) })
 	}
-	const exStyle = () => Number(api.GetWindowLongPtrW(hwnd, GWL_EXSTYLE))
-	const steps: Record<string, unknown>[] = []
-	const attempt = (step: string) => {
-		const ok = api.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
-		const error = ok ? 0 : api.GetLastError()
-		const after = read()
-		steps.push({ step, ok, error, after, exStyle: exStyle().toString(16) })
-		return after === WDA_EXCLUDEFROMCAPTURE
-	}
-
-	const before = read()
-	const style = exStyle()
-	if (before !== WDA_EXCLUDEFROMCAPTURE && !attempt('as-is')) {
-		api.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT))
-		if (!attempt('not-layered')) {
-			api.SetWindowRgn(hwnd, 0, true)
-			attempt('not-layered-no-region')
-		}
-		// Clicks have to go through the border again
-		window.setIgnoreMouseEvents(true)
-		steps.push({ step: 'click-through-back', after: read(), exStyle: exStyle().toString(16) })
-	}
-	rcLog('indicator-affinity', {
-		before,
-		exStyle: style.toString(16),
-		contentProtected: window.isContentProtected(),
-		excluded: read() === WDA_EXCLUDEFROMCAPTURE,
-		steps,
-	})
+	window.setIgnoreMouseEvents(true)
 }
 
 /**
@@ -207,10 +175,9 @@ function createIndicatorWindow(bounds: Rectangle): BrowserWindow {
 	})
 
 	window.removeMenu()
-	// Only for the presenter: kept out of the capture, so the viewers do not see it. Windows 10
-	// 2004+ leaves it out (WDA_EXCLUDEFROMCAPTURE), older Windows captures it black. Set before
-	// the window becomes layered for the click-through. macOS honours it only for captures that
-	// do not use ScreenCaptureKit, which Chromium does use: there it stays visible, as on Linux.
+	// Only for the presenter: kept out of the capture where the OS allows it. On Windows this
+	// alone fails for a layered window, see excludeFromCaptureOnWindows. macOS honours it only
+	// for captures without ScreenCaptureKit, which Chromium uses; Linux has no such thing.
 	window.setContentProtection(true)
 	// Should the OS still enforce a minimum size, only the requested strip is painted
 	if (!isMac) {
@@ -226,7 +193,7 @@ function createIndicatorWindow(bounds: Rectangle): BrowserWindow {
 	// showInactive to never steal the focus from whatever the user is presenting
 	window.once('ready-to-show', () => {
 		window.showInactive()
-		ensureExcludedFromCapture(window)
+		excludeFromCaptureOnWindows(window)
 	})
 
 	return window
