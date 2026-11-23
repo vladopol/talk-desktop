@@ -855,6 +855,13 @@ control takes from it:
   all-displays fallback;
 - the window to extend with the banner (`setScreenshareIndicator`, `:218`).
 
+Since `build-27` the strips are kept out of the capture: only the presenter sees the border.
+`setContentProtection(true)` alone fails silently on Windows, which refuses
+`WDA_EXCLUDEFROMCAPTURE` for a layered window (error 8), and the click-through makes the strips
+layered; `excludeFromCaptureOnWindows` drops the layered style, sets the affinity and puts the
+click-through back. On macOS Chromium captures through ScreenCaptureKit, which ignores content
+protection, and Linux has none, so viewers still see the border there (see `CUSTOM-BUILD.md`).
+
 spreed (`.overrides/spreed`, `build/custom` on v25.0.8):
 
 | Where | What it is | Relevance |
@@ -926,6 +933,9 @@ gh run download <run id> --repo vladopol/talk-desktop --dir out/build-rc-5
 | `build-rc-12` | + elevated windows on Windows: refused with a reason, "Switch window" | Built in CI on all platforms (run 45068026142) |
 | `build-rc-13` | + no stuck modifiers after a layout switch; Ctrl+C/Ctrl+V of files on the presenter's machine; consent window: "Shared clipboard", login in a tooltip; the banner slides away from the controller's cursor | Windows and Linux in CI (run 45175734911), macOS job lost to runner capacity, dmg built locally; tested 2026-11-23, everything works |
 | `build-rc-14` | + the controller's toolbar in the call's top bar, behind a tab on the frame without a top bar | Windows and Linux in CI (run 45186104434), macOS job lost to runner capacity, dmg built locally; tested 2026-11-23, everything works; went into `build/custom` as `build-25` |
+| `build-rc-15` | + the indicator border kept out of the capture (`setContentProtection`) | Cancelled; went straight into `build/custom` as `build-26` (run 45194796480), where the viewers on Windows 10 22H2 still saw the border |
+| `build-rc-16` | + logging of the display affinity of the border strips | Windows only (run 45201064571); the log showed `SetWindowDisplayAffinity` refused with error 8 |
+| `build-rc-17` | + layered style dropped before setting the affinity, click-through put back after | Windows only (run 45206520172); tested 2026-11-23: the viewers no longer see the border, the presenter does, clicks at the screen edge (Start) work; went into `build/custom` as `build-27` (run 45212285623) |
 
 GitHub-hosted macOS runners are sometimes short: on 2026-11-20 the macOS job of `build-rc-4` was
 cancelled after 15 minutes in the queue ("The job was not acquired by Runner of type hosted"), and
