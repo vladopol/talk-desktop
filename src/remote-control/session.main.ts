@@ -10,7 +10,7 @@
  */
 
 import type { WebContents } from 'electron'
-import type { ControlledSource, Injector, MouseButton, OsPoint, OsRect } from './injector.types.ts'
+import type { ControlledSource, Injector, ModifierState, MouseButton, OsPoint, OsRect } from './injector.types.ts'
 import type { RcClip, RcDeclineReason, RcInputMessage, RcOs, RcPayload, RcRevokeReason, RcSourceKind, RcStateName, RcStateReason } from './protocol.ts'
 
 import { app, clipboard, desktopCapturer, globalShortcut, ipcMain, powerMonitor } from 'electron'
@@ -951,10 +951,15 @@ type Capture = {
 	mapModifiers: boolean
 	clipboard: boolean
 	listener: (event: Electron.Event, input: Electron.Input) => void
+	modifierPoll: ReturnType<typeof setInterval>
 }
 
+/** How often the controller's modifiers are checked against the OS, ms */
+const MODIFIER_POLL_INTERVAL = 200
+
 let capture: Capture | null = null
-const capturedModifiers = new Set<string>()
+/** Modifiers held by the controller: mapped code → physical code */
+const capturedModifiers = new Map<string, string>()
 
 /**
  * Whether a Talk window currently captures keys for remote control.
@@ -998,6 +1003,24 @@ function isPasteShortcut(code: string) {
 	return (commandHeld && code === 'KeyV') || (shiftHeld && code === 'Insert')
 }
 
+/**
+ * Release the modifiers the controller's OS has released without a keyUp: Windows swallows it
+ * when Ctrl+Shift or Alt+Shift switches the keyboard layout, and the modifier would stay
+ * down on the presenter, turning every letter into a shortcut
+ *
+ * @param webContents - The controller's Talk window
+ * @param held - The modifiers the OS holds now
+ * @param currentCode - The physical code of the key event being handled, its own state is left to it
+ */
+function releaseStaleModifiers(webContents: WebContents, held: ModifierState, currentCode?: string) {
+	for (const [code, physical] of capturedModifiers) {
+		if (physical !== currentCode && !held[physical.replace(/(Left|Right)$/, '') as keyof ModifierState]) {
+			capturedModifiers.delete(code)
+			webContents.send('remoteControl:capturedKey', code, false)
+		}
+	}
+}
+
 const watchedForDestroy = new WeakSet<Electron.WebContents>()
 
 /**
@@ -1009,12 +1032,22 @@ const watchedForDestroy = new WeakSet<Electron.WebContents>()
 function setCapture(webContents: WebContents, options: { presenterOs: RcOs, mapModifiers: boolean, clipboard: boolean } | null) {
 	if (capture) {
 		capture.webContents.removeListener('before-input-event', capture.listener)
+		clearInterval(capture.modifierPoll)
 		capture = null
 		capturedModifiers.clear()
 	}
 	if (!options) {
 		return
 	}
+	// A swallowed keyUp is noticed without waiting for the next key: until then the presenter
+	// would get every click with the modifier
+	void getInjector()
+	const modifierPoll = setInterval(() => {
+		const held = injector?.modifiers()
+		if (held) {
+			releaseStaleModifiers(webContents, held)
+		}
+	}, MODIFIER_POLL_INTERVAL)
 	const listener = (event: Electron.Event, input: Electron.Input) => {
 		if (input.type !== 'keyDown' && input.type !== 'keyUp') {
 			return
@@ -1022,6 +1055,12 @@ function setCapture(webContents: WebContents, options: { presenterOs: RcOs, mapM
 		// Ctrl+W, Ctrl+R, F5, F11, F12, Alt, Ctrl+Tab, the menu accelerators, back/forward
 		// navigation and the call hotkeys of Talk: nothing reaches the page or the menu
 		event.preventDefault()
+		// Before the key itself, so that a letter never goes out with a released modifier. The
+		// OS is asked, not the event: Chromium drops Ctrl and Alt from the flags of AltGr
+		const held = injector?.modifiers()
+		if (held) {
+			releaseStaleModifiers(webContents, held, input.code)
+		}
 		const down = input.type === 'keyDown'
 		if (down && input.isAutoRepeat) {
 			// The presenter's OS generates the auto-repeat itself
@@ -1033,7 +1072,7 @@ function setCapture(webContents: WebContents, options: { presenterOs: RcOs, mapM
 		}
 		if (/^(Control|Alt|Shift|Meta)(Left|Right)$/.test(code)) {
 			if (down) {
-				capturedModifiers.add(code)
+				capturedModifiers.set(code, input.code)
 			} else {
 				capturedModifiers.delete(code)
 			}
@@ -1060,7 +1099,7 @@ function setCapture(webContents: WebContents, options: { presenterOs: RcOs, mapM
 			}
 		})
 	}
-	capture = { webContents, ...options, listener }
+	capture = { webContents, ...options, listener, modifierPoll }
 }
 
 // ---------------------------------------------------------------------------------------

@@ -47,6 +47,9 @@ export type WindowStateResult = 'normal' | 'hidden' | 'gone'
 /** A mouse button as in the protocol: 0 left, 1 middle, 2 right, 3 back, 4 forward */
 export type MouseButton = 0 | 1 | 2 | 3 | 4
 
+/** Which modifiers are held on this machine's keyboard, by KeyboardEvent.code prefix */
+export type ModifierState = Record<'Control' | 'Alt' | 'Shift' | 'Meta', boolean>
+
 /**
  * Injects input into the OS. Only the main process has one.
  * Every method is synchronous and never throws: a failed call is reported by the return value.
@@ -78,6 +81,8 @@ export interface Injector {
 	leaveElevated(source: ControlledSource): Promise<LeaveElevatedResult>
 	/** The current cursor position */
 	cursor(): OsPoint | null
+	/** The modifiers held on this machine's keyboard now, used on the controller's side */
+	modifiers(): ModifierState | null
 	move(point: OsPoint): void
 	button(button: MouseButton, down: boolean, point: OsPoint, clickCount: number): void
 	/** Scroll by dx, dy in 1/120 of a notch */
