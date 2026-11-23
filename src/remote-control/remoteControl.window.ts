@@ -46,6 +46,17 @@ export type BannerState = {
 let consentWindow: BrowserWindow | null = null
 let bannerWindow: BrowserWindow | null = null
 let bannerState: BannerState | null = null
+/** The banner has slid up out of the controller's way */
+let bannerAway = false
+let bannerHideTimer: NodeJS.Timeout | undefined
+let bannerReturnTimer: NodeJS.Timeout | undefined
+
+/** Distance around the banner within which the controller's cursor sends it away, DIP */
+const BANNER_DODGE_MARGIN = 3
+/** How long the cursor must stay away before the banner comes back, ms */
+const BANNER_RETURN_DELAY = 600
+/** The slide in RemoteControlBanner.vue, ms */
+const BANNER_SLIDE_DURATION = 200
 /*
  * The size of each window as requested, in DIP. It is never read back from the window: on Windows
  * with a display scale other than 100 % a frameless window comes back a pixel or so larger, and
@@ -72,7 +83,9 @@ function createWindow(mode: 'consent' | 'banner', size: { width: number, height:
 		acceptFirstMouse: mode === 'banner',
 		alwaysOnTop: true,
 		autoHideMenuBar: true,
-		backgroundColor: BUILD_CONFIG.backgroundColor,
+		// The banner is transparent around its content, which slides out of the way
+		backgroundColor: mode === 'banner' ? '#00000000' : BUILD_CONFIG.backgroundColor,
+		transparent: mode === 'banner',
 		frame: false,
 		fullscreenable: false,
 		icon: getBrowserWindowIcon(),
@@ -229,10 +242,60 @@ export function showBanner(state: BannerState, onAction: (action: BannerAction) 
 export function hideBanner() {
 	bannerState = null
 	bannerActionHandler = null
+	bannerAway = false
+	clearTimeout(bannerHideTimer)
+	clearTimeout(bannerReturnTimer)
+	bannerReturnTimer = undefined
 	if (bannerWindow && !bannerWindow.isDestroyed()) {
 		bannerWindow.destroy()
 	}
 	bannerWindow = null
+}
+
+/**
+ * Slide the banner up while the controller's cursor is over it or near, so that what is under
+ * it can be reached, and back once the cursor has left. Hidden at the end of the slide: an
+ * invisible window would still take the clicks.
+ *
+ * @param controllerCursor - Whether the cursor is the controller's now, just injected; false
+ * brings the banner back at once (the presenter took the mouse, the session paused)
+ */
+export function dodgeBanner(controllerCursor: boolean) {
+	const window = bannerWindow
+	if (!window || window.isDestroyed()) {
+		return
+	}
+	let near = false
+	if (controllerCursor) {
+		const cursor = screen.getCursorScreenPoint()
+		const bounds = window.getBounds()
+		near = cursor.x >= bounds.x - BANNER_DODGE_MARGIN && cursor.x < bounds.x + bounds.width + BANNER_DODGE_MARGIN
+			&& cursor.y >= bounds.y - BANNER_DODGE_MARGIN && cursor.y < bounds.y + bounds.height + BANNER_DODGE_MARGIN
+	}
+	if (near) {
+		clearTimeout(bannerReturnTimer)
+		bannerReturnTimer = undefined
+		if (!bannerAway) {
+			bannerAway = true
+			window.webContents.send('remoteControl:bannerAway', true)
+			bannerHideTimer = setTimeout(() => bannerAway && !window.isDestroyed() && window.hide(), BANNER_SLIDE_DURATION)
+		}
+		return
+	}
+	if (!bannerAway || (controllerCursor && bannerReturnTimer)) {
+		return
+	}
+	clearTimeout(bannerReturnTimer)
+	bannerReturnTimer = setTimeout(() => {
+		bannerReturnTimer = undefined
+		if (window.isDestroyed()) {
+			return
+		}
+		bannerAway = false
+		clearTimeout(bannerHideTimer)
+		window.showInactive()
+		window.webContents.send('remoteControl:bannerAway', false)
+	}, controllerCursor ? BANNER_RETURN_DELAY : 0)
 }
 
 /**

@@ -22,7 +22,7 @@ import { BUILD_CONFIG } from '../shared/build.config.ts'
 import { KEYMAP } from './keymap.ts'
 import { rcLog } from './log.main.ts'
 import { getSourceKind, LIMITS, parseRcMessage, splitClipboardText } from './protocol.ts'
-import { closeConsentWindow, hideBanner, isConsentWindowOpen, showBanner, showConsentWindow } from './remoteControl.window.ts'
+import { closeConsentWindow, dodgeBanner, hideBanner, isConsentWindowOpen, showBanner, showConsentWindow } from './remoteControl.window.ts'
 
 const REVOKE_ACCELERATOR = 'Control+Alt+Shift+Escape'
 
@@ -404,6 +404,10 @@ function updateBanner(clipboardNote: string | null = null) {
 		const current = session
 		setTimeout(() => session === current && updateBanner(), 4000)
 	}
+	if (session.state !== 'active') {
+		// The presenter took the mouse or the session paused: they need the banner
+		dodgeBanner(false)
+	}
 	showBanner({
 		name: session.name,
 		windowMode: session.source.kind === 'window',
@@ -719,6 +723,7 @@ function handleInput(from: string, raw: unknown) {
 			}
 			injector!.move(point)
 			current.injectedCursor = point
+			dodgeBanner(true)
 			return
 		}
 		case 'esc':

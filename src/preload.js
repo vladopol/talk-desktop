@@ -152,7 +152,7 @@ const TALK_DESKTOP = {
 		/**
 		 * Subscribe to an event from the main process
 		 *
-		 * @param {'send'|'hostSession'|'capturedKey'|'capturedPaste'|'banner'} name - Event
+		 * @param {'send'|'hostSession'|'capturedKey'|'capturedPaste'|'banner'|'bannerAway'} name - Event
 		 * @param {Function} callback - Called with the event arguments
 		 * @return {() => void} Unsubscribe
 		 */
