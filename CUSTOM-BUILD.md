@@ -5,7 +5,7 @@
 
 # Custom build
 
-This fork carries six changes that are not in upstream Nextcloud Talk Desktop yet, and
+This fork carries nine changes that are not in upstream Nextcloud Talk Desktop yet, and
 builds unsigned distributables for Windows, macOS and Linux from them.
 
 The list is meant to shrink. Every change here is a patch to re-resolve on every
@@ -17,8 +17,8 @@ Everything here is specific to the fork. Nothing in this document applies to
 
 ## What is in the build
 
-Three of the changes live in the desktop client, three in the built-in Talk (`spreed`),
-which is bundled into the app at build time.
+Five of the changes live in the desktop client, three in the built-in Talk (`spreed`),
+which is bundled into the app at build time, and one, remote control, in both.
 
 | # | Change | Repository | Platforms |
 | - | ------ | ---------- | --------- |
@@ -28,6 +28,9 @@ which is bundled into the app at build time.
 | 4 | Zoom, pan and rotate images in the built-in viewer ([talk-desktop#1812](https://github.com/nextcloud/talk-desktop/pull/1812), closed upstream in favour of [spreed#19504](https://github.com/nextcloud/spreed/pull/19504)) | talk-desktop | all |
 | 5 | Let the "Do not disturb" user status silence notification banners, not only sounds and the call popup | talk-desktop | all |
 | 6 | Keep the participant stripe as the user set it when following a participant, instead of collapsing it ([spreed#19162](https://github.com/nextcloud/spreed/issues/19162)) | spreed | all |
+| 7 | Outline every shared screen with a yellow 1 px border, so a share is not forgotten with the Talk window minimized | talk-desktop | all |
+| 8 | Remote control during screen sharing: another participant drives the presenter's mouse and keyboard and exchanges text through the clipboard, with consent every time ([REMOTE-CONTROL.md](REMOTE-CONTROL.md)) | talk-desktop + spreed | presenter: Windows, macOS, Linux on X11; controller: all |
+| 9 | Draw the tooltips of `title` attributes on macOS, where the native ones do not show | talk-desktop | macOS |
 
 Change 4 has an end date: upstream closed the pull request because the viewer is to be
 replaced by `@nextcloud/viewer` ([spreed#19504](https://github.com/nextcloud/spreed/pull/19504)),
@@ -35,34 +38,35 @@ which brings zoom and rotation of its own. That is planned for Talk 36; once the
 client ships it, drop change 4 rather than porting it.
 
 Change 2 is Windows-only by nature: it enumerates windows through `user32` via the
-`koffi` FFI module. `koffi` is packaged for `win32` only in `build/custom`; the remote control
-branch packages it for macOS (both prebuilts in both halves of the universal app) and Linux too.
+`koffi` FFI module. Change 8 uses `koffi` on every platform, so it is packaged for Windows,
+macOS (both prebuilts in both halves of the universal app) and Linux.
 
-### On test: remote control during screen sharing
+### What changes 7, 8 and 9 have to keep
 
-Not in `build/custom` yet. On `feat/remote-control` in both forks, built as `build-rc-N`
-test builds (see [Building](#building)), two more changes are being tested:
+They were tested as `build-rc-1` … `build-rc-14` on `feat/remote-control` in both forks and
+went into `build/custom` with `build-25`. Design, protocol, testing log and debugging:
+[REMOTE-CONTROL.md](REMOTE-CONTROL.md).
 
-- **The screensharing indicator** - a yellow 1 px border along the edges of every shared screen,
-  so a share is not forgotten with the Talk window minimized. Chromium draws such a border around
-  a captured window, but not around a screen. Four thin click-through windows per display rather
+- **The screensharing indicator (7)** - four thin click-through windows per display rather
   than one screen-sized transparent one: transparency needs a compositor and an alpha visual,
   without them (some Linux drivers) a screen-sized transparent window turns black. On macOS the
   strips need `enableLargerThanScreen: true`, or they are pushed into the work area; on Windows
   `thickFrame: false` and a `setShape` clip, or the caption minimum height makes the top strip
   30-40 px thick. Start and end of a share are seen by wrapping `getUserMedia`; the live previews
-  of the picker opt out through `getUserMediaWithoutIndicator()`.
-- **Remote control** - another participant drives the presenter's mouse and keyboard and
-  exchanges text through the clipboard, for a shared screen and a shared window, with consent
-  every time. Presenter on Windows, macOS and Linux on X11; controller on any desktop client.
-  Everything is in `src/remote-control/`; spreed carries a small connector without strings
-  (`fromUserId` in `signaling.js`, `attach` in `webrtc/index.js`, mount points in
-  `ScreenShare.vue` and in the call's `BottomBar.vue`). Design, protocol, status, test builds, debugging and the testing log:
-  [REMOTE-CONTROL.md](REMOTE-CONTROL.md).
-
-When they go into `build/custom` they become rows of the table above, and the last commit of
-the talk-desktop branch (`ci: build the remote control test branch with its spreed branch`) is
-dropped, so that the workflow bundles spreed from `build/custom` again.
+  of the picker opt out through `getUserMediaWithoutIndicator()`. Remote control extends it with
+  its banner.
+- **Remote control (8)** is self-contained in `src/remote-control/` on the desktop side; outside
+  it there are only hooks in `main.js`, `preload.js`, the settings section, the Talk renderer
+  entry and `forge.config.js` (`koffi`). spreed carries a small connector **without strings**:
+  `fromUserId` in `signaling.js`, `attach` in `webrtc/index.js`, the layer's mount point in
+  `ScreenShare.vue`, the "Request control" button's in `BottomBar.vue` and the controller's
+  toolbar's in `TopBar.vue` (`mountToolbarSlot`). Every string lives in Talk Desktop's l10n:
+  `scripts/refresh-talk-l10n.sh` replaces spreed's `l10n/` on every build. On a rebase these
+  mount points are the parts to re-resolve by hand; the connector calls are all optional
+  (`?.`), so a lost one disables a piece of the feature rather than breaking the call.
+- **The macOS tooltips (9)** - `src/talk/renderer/titleTooltips.ts` draws the tooltip of any
+  element with a `title`, as native tooltips do not show in Talk's windows on macOS (cause not
+  found). Drop it once native tooltips work again.
 
 ### What change 1 has to keep
 
@@ -180,7 +184,8 @@ leaving whatever has landed on `stable35` since the tag.
 
 The feature work itself lives on its own branches (`feat/screenshare-minimized-windows`,
 `feat/image-viewer-panzoom`, `feat/browse-during-call-*`,
-`feat/release-camera-on-video-off*`) and is merged into `build/custom`.
+`feat/release-camera-on-video-off*`, `feat/remote-control` in both forks for changes 7-9)
+and is merged into `build/custom`.
 `feat/screenshare-content-protection` is the exception: it is kept but no longer merged,
 see above. While both screensharing branches were in, they collided in `src/main.js` and
 `src/preload.js` over the `require('electron')` destructuring and the `TALK_DESKTOP`
